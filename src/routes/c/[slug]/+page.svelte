@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.category.name} — Hearth</title>
+	<title>{data.category.name} — Gitorum</title>
 </svelte:head>
 
 <div class="space-y-4">
@@ -25,13 +25,13 @@
 		<div class="flex items-center gap-2">
 			<a
 				href="/c/{data.category.slug}?sort=UPDATED_AT"
-				class="rounded px-3 py-1 text-sm {data.sort === 'UPDATED_AT' || !data.sort ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}"
+				class="rounded px-3 py-1 text-sm {data.sort === 'UPDATED_AT' || !data.sort ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}"
 			>
 				Latest
 			</a>
 			<a
 				href="/c/{data.category.slug}?sort=CREATED_AT"
-				class="rounded px-3 py-1 text-sm {data.sort === 'CREATED_AT' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}"
+				class="rounded px-3 py-1 text-sm {data.sort === 'CREATED_AT' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}"
 			>
 				Newest
 			</a>
@@ -41,7 +41,7 @@
 	{#if data.threads.length === 0}
 		<div class="rounded-lg border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
 			<p class="text-gray-500 dark:text-gray-400">No threads yet in this category.</p>
-			<a href="/new" class="mt-2 inline-block text-sm text-orange-600 hover:text-orange-700 dark:text-orange-400">Start a new thread →</a>
+			<a href="/new" class="mt-2 inline-block text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Start a new thread →</a>
 		</div>
 	{:else}
 		<div class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">

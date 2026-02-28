@@ -40,7 +40,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.thread.title} — Hearth</title>
+	<title>{data.thread.title} — Gitorum</title>
 </svelte:head>
 
 <div class="space-y-6">
@@ -160,14 +160,14 @@
 				<button
 					type="button"
 					onclick={() => showPreview = false}
-					class="px-3 py-1.5 text-sm {!showPreview ? 'border-b-2 border-orange-500 font-medium text-orange-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}"
+					class="px-3 py-1.5 text-sm {!showPreview ? 'border-b-2 border-indigo-500 font-medium text-indigo-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}"
 				>
 					Write
 				</button>
 				<button
 					type="button"
 					onclick={() => showPreview = true}
-					class="px-3 py-1.5 text-sm {showPreview ? 'border-b-2 border-orange-500 font-medium text-orange-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}"
+					class="px-3 py-1.5 text-sm {showPreview ? 'border-b-2 border-indigo-500 font-medium text-indigo-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}"
 				>
 					Preview
 				</button>
@@ -198,7 +198,7 @@
 				<button
 					onclick={submitReply}
 					disabled={replying || !replyBody.trim()}
-					class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+					class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
 				>
 					{replying ? 'Posting...' : 'Post Reply'}
 				</button>

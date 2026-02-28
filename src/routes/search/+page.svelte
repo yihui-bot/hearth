@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-	<title>Search — Hearth</title>
+	<title>Search — Gitorum</title>
 </svelte:head>
 
 <div class="space-y-4">
@@ -21,7 +21,7 @@
 		/>
 		<button
 			type="submit"
-			class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
+			class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
 		>
 			Search
 		</button>

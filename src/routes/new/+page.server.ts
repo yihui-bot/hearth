@@ -8,8 +8,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		redirect(302, '/auth/login?redirect=/new');
 	}
 
-	const categories = await fetchCategories();
-	return { categories };
+	const categories = await fetchCategories(locals.userToken);
+	return { categories: categories || [] };
 };
 
 export const actions: Actions = {
@@ -27,7 +27,7 @@ export const actions: Actions = {
 			return { error: 'All fields are required', title, categoryId, body };
 		}
 
-		const repoId = await fetchRepoId();
+		const repoId = await fetchRepoId(locals.userToken);
 		const discussion = await createDiscussion(
 			locals.userToken,
 			repoId,

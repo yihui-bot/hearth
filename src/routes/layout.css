@@ -58,7 +58,7 @@
 		color: var(--color-gray-400, #9ca3af);
 	}
 	.prose a {
-		color: var(--color-orange-600, #ea580c);
+		color: var(--color-indigo-600, #4f46e5);
 		text-decoration: underline;
 	}
 	.prose img {

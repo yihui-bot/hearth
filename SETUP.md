@@ -37,28 +37,25 @@ cp .env.example .env
 | `GITHUB_OAUTH_CLIENT_SECRET` | From your GitHub OAuth App |
 | `BASE_URL` | Your production URL (e.g. `https://forum.example.com`) |
 
-### Optional — Server Token (for higher rate limits)
+### Optional — Customization
 
-You have three options for server-side API authentication, from simplest to most robust:
+| Variable | Description |
+|----------|-------------|
+| `FORUM_TITLE` | Custom forum title (default: `Gitorum`) |
+| `FORUM_LOGO_URL` | URL to a custom logo image (replaces the default SVG icon) |
+| `FORUM_FOOTER_HTML` | Custom HTML for the page footer (replaces default "Powered by GitHub Discussions") |
 
-#### Option A: No token (anonymous mode)
-Leave `GITHUB_SERVER_TOKEN` unset. The forum will work with GitHub's anonymous rate limit (60 requests/hour). A banner will remind visitors to sign in with GitHub for a better experience.
+### API Rate Limits
 
-#### Option B: Personal Access Token
-Set `GITHUB_SERVER_TOKEN` to a GitHub PAT with `read:discussion` scope. This gives 5,000 requests/hour. Simple but the token doesn't expire automatically.
+Gitorum reads from the GitHub API. Without any server-side token, it uses anonymous access (**60 requests/hour**). This is fine for personal or low-traffic forums.
 
-```
-GITHUB_SERVER_TOKEN=ghp_xxxxxxxxxxxx
-```
-
-#### Option C: GitHub App (recommended for production)
-A GitHub App generates short-lived tokens automatically, which is more secure and avoids token expiry issues. See the next section for setup instructions.
+For higher traffic, set up a **GitHub App** (see below) which provides **5,000 requests/hour** with automatic token renewal. When a GitHub App token hits its rate limit, Gitorum automatically requests a fresh token and retries.
 
 ---
 
-## 3. Setting Up a GitHub App (Recommended)
+## 3. Setting Up a GitHub App (Recommended for Production)
 
-A GitHub App provides automatic short-lived token generation (tokens expire after 1 hour and are renewed automatically). This is the most secure and robust approach for production.
+A GitHub App provides automatic short-lived token generation (tokens expire after 1 hour and are renewed automatically). When a token's rate limit is exhausted, Gitorum will automatically generate a new one and retry the request.
 
 ### Step 1: Create the GitHub App
 
@@ -111,7 +108,7 @@ GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA P
 GITHUB_APP_INSTALLATION_ID=12345678
 ```
 
-When these are set, Gitorum will automatically generate short-lived installation tokens for read requests. You do **not** need `GITHUB_SERVER_TOKEN` if using a GitHub App.
+When these are set, Gitorum will automatically generate short-lived installation tokens for read requests and renew them when they expire or hit rate limits.
 
 ---
 
@@ -230,10 +227,7 @@ If you prefer Page Rules:
 GITHUB_REPO_OWNER=your-org-or-username
 GITHUB_REPO_NAME=your-forum-data-repo
 
-# Server-side read token (Option B — pick one of B or C)
-GITHUB_SERVER_TOKEN=ghp_xxxx
-
-# GitHub App (Option C — pick one of B or C)
+# GitHub App (recommended for production)
 GITHUB_APP_ID=123456
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 GITHUB_APP_INSTALLATION_ID=12345678
@@ -242,4 +236,9 @@ GITHUB_APP_INSTALLATION_ID=12345678
 GITHUB_OAUTH_CLIENT_ID=Iv1.xxxxxxxxx
 GITHUB_OAUTH_CLIENT_SECRET=xxxxxxxxxxxxxxxxxx
 BASE_URL=https://yourdomain.com
+
+# Customization (optional)
+FORUM_TITLE=My Forum
+FORUM_LOGO_URL=https://example.com/logo.svg
+FORUM_FOOTER_HTML=<a href="https://example.com">My Site</a> · Powered by Gitorum
 ```

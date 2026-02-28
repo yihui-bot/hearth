@@ -15,6 +15,7 @@ Gitorum looks and feels like a modern forum but requires **zero backend infrastr
 - 📱 **Responsive** — mobile-first design
 - ⚡ **Server-side caching** — in-memory + HTTP cache headers for Cloudflare/CDN
 - 🤖 **GitHub App support** — auto-generate short-lived tokens to avoid rate limits
+- 🎨 **Customizable** — configure forum title, logo, and footer via environment variables
 
 ## Quick Start
 
@@ -29,7 +30,7 @@ cp .env.example .env
 npm run dev
 ```
 
-At minimum, set `GITHUB_REPO_OWNER` and `GITHUB_REPO_NAME` to point at a repository with Discussions enabled. The forum will work in anonymous mode (60 req/hr) without any tokens. See [SETUP.md](SETUP.md) for full configuration including GitHub App and OAuth setup.
+At minimum, set `GITHUB_REPO_OWNER` and `GITHUB_REPO_NAME` to point at a repository with Discussions enabled. The forum works immediately with anonymous API access (60 req/hr). See [SETUP.md](SETUP.md) for full configuration including GitHub App and OAuth setup.
 
 ## Documentation
 

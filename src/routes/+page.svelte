@@ -12,7 +12,7 @@
 
 	{#if !data.categories}
 		<div class="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center dark:border-amber-800 dark:bg-amber-900/20">
-			<p class="text-amber-800 dark:text-amber-300 mb-3">
+			<p class="mb-3 text-amber-800 dark:text-amber-300">
 				No API token available. Please <a href="/auth/login" class="font-medium underline">sign in with GitHub</a> to browse discussions.
 			</p>
 			<p class="text-sm text-amber-600 dark:text-amber-400">

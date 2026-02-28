@@ -25,7 +25,7 @@ export const load: PageServerLoad = async ({ params, url, locals, setHeaders }) 
 	} catch (err) {
 		if (err instanceof RateLimitError) {
 			return {
-				category: { name: params.slug, slug: params.slug, emoji: '', description: '', id: '' },
+				category: { name: params.slug.replace(/-/g, ' '), slug: params.slug, emoji: '', description: '', id: '' },
 				threads: [],
 				pageInfo: { hasNextPage: false, endCursor: '' },
 				sort: 'UPDATED_AT',

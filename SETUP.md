@@ -43,7 +43,7 @@ cp .env.example .env
 |----------|-------------|
 | `FORUM_TITLE` | Custom forum title (default: `Gitorum`) |
 | `FORUM_LOGO_URL` | URL to a custom logo image (replaces the default SVG icon) |
-| `FORUM_FOOTER_HTML` | Custom HTML for the page footer (replaces default "Powered by GitHub Discussions") |
+| `FORUM_FOOTER_HTML` | Custom footer content in Markdown format (rendered and sanitized before display) |
 
 ### API Rate Limits
 
@@ -240,5 +240,5 @@ BASE_URL=https://yourdomain.com
 # Customization (optional)
 FORUM_TITLE=My Forum
 FORUM_LOGO_URL=https://example.com/logo.svg
-FORUM_FOOTER_HTML=<a href="https://example.com">My Site</a> · Powered by Gitorum
+FORUM_FOOTER_HTML=Powered by [Gitorum](https://github.com) · [My Site](https://example.com)
 ```

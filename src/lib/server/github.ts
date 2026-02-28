@@ -319,8 +319,8 @@ async function fetchThreadViaRest(owner: string, repo: string, number: number): 
 			reactions: normalizeRestReactions(c.reactions),
 			replies: { nodes: [] }
 		}));
-	} catch {
-		// If comments fail (e.g., rate limit), show thread without comments
+	} catch (err) {
+		console.warn('Failed to fetch comments via REST (showing thread without comments):', err);
 	}
 
 	return {

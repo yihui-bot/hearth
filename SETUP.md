@@ -117,6 +117,8 @@ GITHUB_APP_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PR
 GITHUB_APP_INSTALLATION_ID=12345678
 ```
 
+> **Note:** Whether the private key value needs surrounding quotes depends on your hosting platform. Most platforms (Cloudflare, Vercel) accept the value as-is in their dashboard UI. If setting via shell, wrap in double quotes.
+
 When these are set, Gitorum will automatically generate short-lived installation tokens for read requests and renew them when they expire or hit rate limits.
 
 ---

@@ -1,1 +1,0 @@
-bash: line 1:  3849 Hangup                  WRANGLER_CONFIG=/tmp/wrangler-test.toml npx wrangler pages dev .svelte-kit/cloudflare --port 8788 < /dev/null > /tmp/wrangler4.log 2>&1

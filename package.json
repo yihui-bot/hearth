@@ -24,9 +24,6 @@
 	},
 	"dependencies": {
 		"@octokit/graphql": "^9.0.3",
-		"@types/dompurify": "^3.0.5",
-		"dompurify": "^3.3.1",
-		"isomorphic-dompurify": "^3.0.0",
 		"marked": "^17.0.3"
 	}
 }

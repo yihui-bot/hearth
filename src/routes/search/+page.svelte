@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { timeAgo, slugify } from '$lib/utils';
+	import { formatDate } from '$lib/utils';
 
 	let { data } = $props();
 </script>
@@ -38,7 +38,7 @@
 			{#each data.results as thread}
 				{#if thread.number}
 					<a
-						href="/t/{thread.number}/{slugify(thread.title)}"
+						href="/t/{thread.number}"
 						class="flex items-center gap-4 px-4 py-3 transition hover:bg-gray-50 dark:hover:bg-gray-800/50"
 					>
 						{#if thread.author}
@@ -54,7 +54,7 @@
 								{#if thread.category}
 									 in {thread.category.name}
 								{/if}
-								 · {timeAgo(thread.createdAt)}
+								 · {formatDate(thread.createdAt)}
 							</p>
 						</div>
 

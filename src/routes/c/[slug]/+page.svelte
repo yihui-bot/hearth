@@ -1,99 +1,177 @@
 <script lang="ts">
-	import { timeAgo, slugify } from '$lib/utils';
+import { formatDate, truncateText } from '$lib/utils';
 
-	let { data } = $props();
+let { data } = $props();
+
+const PAGES_AROUND_CURRENT = 2;
+const MAX_PAGES_WITHOUT_ELLIPSIS = 7;
+
+function pageUrl(p: number) {
+return `/c/${data.category.slug}?page=${p}&sort=${data.sort}`;
+}
+
+function pageNumbers(current: number, total: number): (number | null)[] {
+if (total <= MAX_PAGES_WITHOUT_ELLIPSIS) return Array.from({ length: total }, (_, i) => i + 1);
+const pages: (number | null)[] = [];
+const add = (n: number) => { if (!pages.includes(n)) pages.push(n); };
+add(1);
+if (current - PAGES_AROUND_CURRENT > 2) pages.push(null);
+for (let p = Math.max(2, current - PAGES_AROUND_CURRENT); p <= Math.min(total - 1, current + PAGES_AROUND_CURRENT); p++) add(p);
+if (current + PAGES_AROUND_CURRENT < total - 1) pages.push(null);
+add(total);
+return pages;
+}
 </script>
 
 <svelte:head>
-	<title>{data.category.name} — {data.forumTitle}</title>
+<title>{data.category.name} — {data.forumTitle}</title>
 </svelte:head>
 
 <div class="space-y-4">
-	{#if data.rateLimited}
-		<div class="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center dark:border-amber-800 dark:bg-amber-900/20">
-			<p class="mb-3 text-amber-800 dark:text-amber-300">⚠️ GitHub API rate limit reached.</p>
-			{#if !data.user}
-				<p class="mb-3 text-sm text-amber-700 dark:text-amber-400">
-					<a href="/auth/login" class="font-medium underline">Sign in with GitHub</a> to continue browsing with a higher rate limit.
-				</p>
-			{/if}
-			<p class="text-sm text-amber-600 dark:text-amber-400">If this persists, please contact the repository administrator.</p>
-		</div>
-	{:else}
-		<div class="flex items-center justify-between">
-			<div>
-				<div class="flex items-center gap-2">
-					<a href="/" class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">← Categories</a>
-				</div>
-				<h1 class="mt-1 text-2xl font-bold">
-					{data.category.emoji || '💬'} {data.category.name}
-				</h1>
-				{#if data.category.description}
-					<p class="text-sm text-gray-500 dark:text-gray-400">{data.category.description}</p>
-				{/if}
-			</div>
+{#if data.rateLimited}
+<div class="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center dark:border-amber-800 dark:bg-amber-900/20">
+<p class="mb-3 text-amber-800 dark:text-amber-300">⚠️ GitHub API rate limit reached.</p>
+{#if !data.user}
+<p class="mb-3 text-sm text-amber-700 dark:text-amber-400">
+<a href="/auth/login" class="font-medium underline">Sign in with GitHub</a> to continue browsing with a higher rate limit.
+</p>
+{/if}
+<p class="text-sm text-amber-600 dark:text-amber-400">If this persists, please contact the repository administrator.</p>
+</div>
+{:else}
+<div class="flex items-center justify-between">
+<div>
+<a href="/" class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">← Home</a>
+<h1 class="mt-1 text-2xl font-bold">
+{data.category.emoji || '💬'} {data.category.name}
+</h1>
+{#if data.category.description}
+<p class="text-sm text-gray-500 dark:text-gray-400">{data.category.description}</p>
+{/if}
+</div>
+<div class="flex items-center gap-2">
+<a href="/c/{data.category.slug}?sort=UPDATED_AT"
+class="rounded px-3 py-1 text-sm {data.sort === 'UPDATED_AT' || !data.sort ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}">
+Latest
+</a>
+<a href="/c/{data.category.slug}?sort=CREATED_AT"
+class="rounded px-3 py-1 text-sm {data.sort === 'CREATED_AT' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}">
+Newest
+</a>
+<a href="/c/{data.category.slug}?sort=top"
+class="rounded px-3 py-1 text-sm {data.sort === 'top' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}">
+Top
+</a>
+<a href="/c/{data.category.slug}?sort=trending"
+class="rounded px-3 py-1 text-sm {data.sort === 'trending' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}">
+Trending
+</a>
+</div>
+</div>
 
-			<div class="flex items-center gap-2">
-				<a
-					href="/c/{data.category.slug}?sort=UPDATED_AT"
-					class="rounded px-3 py-1 text-sm {data.sort === 'UPDATED_AT' || !data.sort ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}"
-				>
-					Latest
-				</a>
-				<a
-					href="/c/{data.category.slug}?sort=CREATED_AT"
-					class="rounded px-3 py-1 text-sm {data.sort === 'CREATED_AT' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}"
-				>
-					Newest
-				</a>
-			</div>
-		</div>
+<!-- Pinned threads for this category -->
+{#if data.pinned && data.pinned.length > 0}
+<div>
+<h2 class="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+📌 Pinned
+</h2>
+<div class="divide-y divide-gray-200 rounded-lg border border-orange-200 bg-orange-50/50 dark:divide-gray-800 dark:border-orange-900/40 dark:bg-orange-950/10">
+{#each data.pinned as thread}
+<a href="/t/{thread.number}" class="flex items-start gap-4 px-4 py-3 transition hover:bg-orange-50 dark:hover:bg-orange-950/20">
+{#if thread.author}
+<img src={thread.author.avatarUrl} alt={thread.author.login} class="mt-0.5 h-8 w-8 shrink-0 rounded-full" />
+{:else}
+<div class="mt-0.5 h-8 w-8 shrink-0 rounded-full bg-gray-300 dark:bg-gray-700"></div>
+{/if}
+<div class="min-w-0 flex-1">
+<div class="flex flex-wrap items-center gap-2">
+<span class="font-medium text-gray-900 dark:text-gray-100">{thread.title}</span>
+{#if thread.labels?.nodes?.length > 0}
+{#each thread.labels.nodes as label}
+<span class="rounded-full border px-1.5 py-0 text-xs font-medium"
+style="background-color:#{label.color}22;color:#{label.color};border-color:#{label.color}55;"
+>{label.name}</span>
+{/each}
+{/if}
+</div>
+{#if thread.bodyText}
+<p class="mt-0.5 line-clamp-2 text-xs text-gray-600 dark:text-gray-400">{truncateText(thread.bodyText)}</p>
+{/if}
+<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+{thread.author?.login || 'ghost'}{#if thread.isAnswered} · <span class="font-medium text-green-600 dark:text-green-400">Answered</span>{/if} · {formatDate(thread.createdAt)}
+</p>
+</div>
+<div class="flex shrink-0 items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+{#if thread.reactions?.totalCount > 0}
+<span>❤️ {thread.reactions.totalCount}</span>
+{/if}
+<span>💬 {thread.comments?.totalCount ?? 0}</span>
+</div>
+</a>
+{/each}
+</div>
+</div>
+{/if}
 
-		{#if data.threads.length === 0}
-			<div class="rounded-lg border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
-				<p class="text-gray-500 dark:text-gray-400">No threads yet in this category.</p>
-				<a href="/new" class="mt-2 inline-block text-sm text-orange-600 hover:text-orange-700 dark:text-orange-400">Start a new thread →</a>
-			</div>
-		{:else}
-			<div class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
-				{#each data.threads as thread}
-					<a
-						href="/t/{thread.number}/{slugify(thread.title)}"
-						class="flex items-center gap-4 px-4 py-3 transition hover:bg-gray-50 dark:hover:bg-gray-800/50"
-					>
-						{#if thread.author}
-							<img src={thread.author.avatarUrl} alt={thread.author.login} class="h-9 w-9 rounded-full" />
-						{:else}
-							<div class="h-9 w-9 rounded-full bg-gray-300 dark:bg-gray-700"></div>
-						{/if}
+{#if data.threads.length === 0 && (!data.pinned || data.pinned.length === 0)}
+<div class="rounded-lg border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+<p class="text-gray-500 dark:text-gray-400">No threads yet in this category.</p>
+<a href="/new" class="mt-2 inline-block text-sm text-orange-600 hover:text-orange-700 dark:text-orange-400">Start a new thread →</a>
+</div>
+{:else if data.threads.length > 0}
+<div class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
+{#each data.threads as thread}
+<a href="/t/{thread.number}" class="flex items-center gap-4 px-4 py-3 transition hover:bg-gray-50 dark:hover:bg-gray-800/50">
+{#if thread.author}
+<img src={thread.author.avatarUrl} alt={thread.author.login} class="h-9 w-9 shrink-0 rounded-full" />
+{:else}
+<div class="h-9 w-9 shrink-0 rounded-full bg-gray-300 dark:bg-gray-700"></div>
+{/if}
+<div class="min-w-0 flex-1">
+<div class="flex flex-wrap items-center gap-2">
+<span class="truncate font-medium text-gray-900 dark:text-gray-100">{thread.title}</span>
+{#if thread.labels?.nodes?.length > 0}
+{#each thread.labels.nodes as label}
+<span class="rounded-full border px-1.5 py-0 text-xs font-medium"
+style="background-color:#{label.color}22;color:#{label.color};border-color:#{label.color}55;"
+>{label.name}</span>
+{/each}
+{/if}
+</div>
+<p class="text-xs text-gray-500 dark:text-gray-400">
+{thread.author?.login || 'ghost'}{#if thread.isAnswered} · <span class="font-medium text-green-600 dark:text-green-400">Answered</span>{/if} · {formatDate(thread.createdAt)}
+</p>
+</div>
+<div class="flex shrink-0 items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+{#if thread.reactions?.totalCount > 0}
+<span title="Reactions">❤️ {thread.reactions.totalCount}</span>
+{/if}
+<span title="Replies">💬 {thread.comments?.totalCount ?? 0}</span>
+</div>
+</a>
+{/each}
+</div>
 
-						<div class="min-w-0 flex-1">
-							<h3 class="truncate font-medium text-gray-900 dark:text-gray-100">{thread.title}</h3>
-							<p class="text-xs text-gray-500 dark:text-gray-400">
-								{thread.author?.login || 'ghost'} · {timeAgo(thread.createdAt)}
-							</p>
-						</div>
-
-						<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-							{#if thread.reactions.totalCount > 0}
-								<span title="Reactions">❤️ {thread.reactions.totalCount}</span>
-							{/if}
-							<span title="Replies">💬 {thread.comments.totalCount}</span>
-						</div>
-					</a>
-				{/each}
-			</div>
-
-			{#if data.pageInfo.hasNextPage}
-				<div class="text-center">
-					<a
-						href="/c/{data.category.slug}?after={data.pageInfo.endCursor}&sort={data.sort}"
-						class="inline-block rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-					>
-						Load more →
-					</a>
-				</div>
-			{/if}
-		{/if}
-	{/if}
+{#if data.totalPages > 1}
+<nav class="flex items-center justify-center gap-1 text-sm" aria-label="Pagination">
+{#if data.page > 1}
+<a href={pageUrl(data.page - 1)} class="rounded border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">‹</a>
+{/if}
+{#each pageNumbers(data.page, data.totalPages) as p}
+{#if p === null}
+<span class="px-1 text-gray-400">…</span>
+{:else}
+<a href={pageUrl(p)}
+class="rounded border px-3 py-1.5 {p === data.page ? 'border-orange-500 bg-orange-50 font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'}"
+aria-current={p === data.page ? 'page' : undefined}
+>{p}</a>
+{/if}
+{/each}
+{#if data.page < data.totalPages}
+<a href={pageUrl(data.page + 1)} class="rounded border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">›</a>
+{/if}
+</nav>
+{/if}
+{/if}
+{/if}
 </div>

@@ -1,6 +1,8 @@
 import { graphql } from '@octokit/graphql';
 import { env } from '$env/dynamic/private';
 
+const COMMENTS_PER_PAGE = 100; // GitHub GraphQL max per request
+
 // ---------------------------------------------------------------------------
 // In-memory cache (server-side, survives across requests within one process)
 // ---------------------------------------------------------------------------
@@ -284,18 +286,34 @@ export async function fetchCategories(userToken?: string | null) {
 			`query($owner: String!, $repo: String!) {
 				repository(owner: $owner, name: $repo) {
 					discussionCategories(first: 20) {
-						nodes { id name description emoji slug }
+						nodes { id name description emoji emojiHTML slug }
 					}
 				}
 			}`,
 			{ owner, repo }
 		)
 	);
-	const categories = result.repository.discussionCategories.nodes;
+	// Replace the shortcode emoji (e.g. ":speaking_head:") with the actual
+	// Unicode character extracted from the emojiHTML field (e.g. "<div>🗣</div>").
+	const categories = result.repository.discussionCategories.nodes.map((cat: any) => ({
+		...cat,
+		emoji: cat.emojiHTML ? cat.emojiHTML.replace(/<[^>]*>/g, '').trim() : cat.emoji
+	}));
 
 	setCache(cacheKey, categories, 120);
 	return categories;
 }
+
+// ---------------------------------------------------------------------------
+// Page-cursor cache for numbered pagination (server-side, per process)
+// Key: `${categoryId}:${orderBy}`, Value: array of endCursors where
+// cursors[i] is the endCursor after page i+1 (used to fetch page i+2).
+// ---------------------------------------------------------------------------
+const pageCursorCache = new Map<string, string[]>();
+
+// Comment-page cursor cache: Map<threadNumber, string[]>
+// cursors[i] = endCursor after comment page i+1 (used to fetch page i+2).
+const commentCursorCache = new Map<number, string[]>();
 
 export async function fetchCategoryBySlug(slug: string, userToken?: string | null) {
 	const categories = await fetchCategories(userToken);
@@ -324,10 +342,12 @@ export async function fetchThreadsByCategory(
 			`query($owner: String!, $repo: String!, $categoryId: ID!, $first: Int!, $after: String, $orderBy: DiscussionOrderField!) {
 				repository(owner: $owner, name: $repo) {
 					discussions(first: $first, categoryId: $categoryId, after: $after, orderBy: { field: $orderBy, direction: DESC }) {
+						totalCount
 						pageInfo { hasNextPage endCursor }
 						nodes {
-							id number title createdAt
+							id number title createdAt isAnswered
 							author { login avatarUrl url }
+							labels(first: 10) { nodes { name color } }
 							comments { totalCount }
 							reactions { totalCount }
 						}
@@ -343,8 +363,49 @@ export async function fetchThreadsByCategory(
 	return discussions;
 }
 
-export async function fetchThread(number: number, userToken?: string | null) {
-	const cacheKey = `thread:${number}`;
+/**
+ * Fetch a specific page of threads for a category.
+ * Uses a server-side cursor cache so any page can be accessed directly.
+ * On first access of page N, pages 1…N-1 are fetched to build the cursor chain.
+ */
+export async function fetchThreadsByPage(
+	categoryId: string,
+	page: number,
+	perPage: number = 20,
+	orderBy: string = 'UPDATED_AT',
+	userToken?: string | null
+) {
+	const storeKey = `${categoryId}:${orderBy}`;
+	let cursors = pageCursorCache.get(storeKey) || [];
+
+	// Build up cursors up to the page we need (cursors[i] = endCursor of page i+1)
+	if (page > 1 && cursors.length < page - 1) {
+		for (let p = cursors.length + 1; p < page; p++) {
+			const prevCursor = cursors.length > 0 ? cursors[cursors.length - 1] : undefined;
+			const res = await fetchThreadsByCategory(categoryId, perPage, prevCursor, orderBy, userToken);
+			if (res?.pageInfo?.endCursor) {
+				cursors = [...cursors, res.pageInfo.endCursor];
+				pageCursorCache.set(storeKey, cursors);
+			} else {
+				break; // No more pages
+			}
+		}
+	}
+
+	const cursor = page > 1 ? cursors[page - 2] : undefined;
+	const data = await fetchThreadsByCategory(categoryId, perPage, cursor, orderBy, userToken);
+
+	// Cache endCursor for next page
+	if (data?.pageInfo?.hasNextPage && data.pageInfo.endCursor && cursors.length < page) {
+		cursors = [...cursors, data.pageInfo.endCursor];
+		pageCursorCache.set(storeKey, cursors);
+	}
+
+	return data;
+}
+
+export async function fetchThread(number: number, commentPage: number = 1, userToken?: string | null): Promise<any> {
+	const cacheKey = `thread:${number}:cp:${commentPage}`;
 	const cached = getCached<any>(cacheKey);
 	if (cached) return cached;
 
@@ -354,22 +415,130 @@ export async function fetchThread(number: number, userToken?: string | null) {
 
 	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
 
-	const result: any = await executeGraphQLRead(token, (gql) =>
+	// For page 1 we fetch full thread metadata + first page of comments.
+	if (commentPage === 1) {
+		const result: any = await executeGraphQLRead(token, (gql) =>
+			gql(
+				`query($owner: String!, $repo: String!, $number: Int!) {
+					repository(owner: $owner, name: $repo) {
+						discussion(number: $number) {
+							id number title body bodyHTML createdAt isAnswered
+							author { login avatarUrl url }
+							category { name slug }
+							labels(first: 10) { nodes { name color } }
+							reactionGroups {
+								content
+								reactors(first: 10) {
+									totalCount
+									nodes { ... on User { login } }
+								}
+							}
+							comments(first: ${COMMENTS_PER_PAGE}) {
+								totalCount
+								pageInfo { hasNextPage endCursor }
+								nodes {
+									id body bodyHTML createdAt
+									author { login avatarUrl url }
+									reactionGroups {
+										content
+										reactors(first: 10) {
+											totalCount
+											nodes { ... on User { login } }
+										}
+									}
+									replies(first: 20) {
+										nodes {
+											id body bodyHTML createdAt
+											author { login avatarUrl url }
+										}
+									}
+								}
+							}
+						}
+					}
+				}`,
+				{ owner, repo, number }
+			)
+		);
+		const thread = result.repository.discussion;
+		const totalCommentPages = Math.max(1, Math.ceil(thread.comments.totalCount / COMMENTS_PER_PAGE));
+
+		// Cache cursor for page 2
+		if (thread.comments.pageInfo.endCursor) {
+			const existing = commentCursorCache.get(number) || [];
+			if (existing.length === 0) {
+				commentCursorCache.set(number, [thread.comments.pageInfo.endCursor]);
+			}
+		}
+
+		const data = { ...thread, commentPage: 1, totalCommentPages };
+		setCache(cacheKey, data, 60);
+		return data;
+	}
+
+	// Page > 1: ensure page-1 data is loaded so we have cursor chain started.
+	let cursors = commentCursorCache.get(number) || [];
+	if (cursors.length === 0) {
+		await fetchThread(number, 1, userToken);
+		cursors = commentCursorCache.get(number) || [];
+	}
+
+	// Build cursor chain up to commentPage - 1.
+	if (cursors.length < commentPage - 1) {
+		for (let p = cursors.length + 1; p < commentPage; p++) {
+			const prevCursor = cursors[p - 2];
+			if (!prevCursor) break;
+			const intermediate: any = await executeGraphQLRead(token, (gql) =>
+				gql(
+					`query($owner: String!, $repo: String!, $number: Int!, $after: String!) {
+						repository(owner: $owner, name: $repo) {
+							discussion(number: $number) {
+								comments(first: ${COMMENTS_PER_PAGE}, after: $after) {
+									pageInfo { endCursor }
+								}
+							}
+						}
+					}`,
+					{ owner, repo, number, after: prevCursor }
+				)
+			);
+			const endCursor = intermediate.repository.discussion.comments.pageInfo.endCursor;
+			if (endCursor) {
+				cursors = [...cursors, endCursor];
+				commentCursorCache.set(number, cursors);
+			} else {
+				break;
+			}
+		}
+	}
+
+	const cursor = cursors[commentPage - 2];
+	if (!cursor) {
+		// Requested page out of range; fall back to page 1.
+		return fetchThread(number, 1, userToken);
+	}
+
+	// Fetch thread metadata from page 1 cache + comments for requested page.
+	const page1 = await fetchThread(number, 1, userToken);
+
+	const commentsResult: any = await executeGraphQLRead(token, (gql) =>
 		gql(
-			`query($owner: String!, $repo: String!, $number: Int!) {
+			`query($owner: String!, $repo: String!, $number: Int!, $after: String!) {
 				repository(owner: $owner, name: $repo) {
 					discussion(number: $number) {
-						id title body bodyHTML createdAt
-						author { login avatarUrl url }
-						category { name slug }
-						reactions(first: 10) { nodes { content } totalCount }
-						comments(first: 50) {
+						comments(first: ${COMMENTS_PER_PAGE}, after: $after) {
 							totalCount
 							pageInfo { hasNextPage endCursor }
 							nodes {
 								id body bodyHTML createdAt
 								author { login avatarUrl url }
-								reactions(first: 10) { nodes { content } totalCount }
+								reactionGroups {
+									content
+									reactors(first: 10) {
+										totalCount
+										nodes { ... on User { login } }
+									}
+								}
 								replies(first: 20) {
 									nodes {
 										id body bodyHTML createdAt
@@ -381,13 +550,164 @@ export async function fetchThread(number: number, userToken?: string | null) {
 					}
 				}
 			}`,
-			{ owner, repo, number }
+			{ owner, repo, number, after: cursor }
 		)
 	);
-	const thread = result.repository.discussion;
+	const moreComments = commentsResult.repository.discussion.comments;
+	const totalCommentPages = Math.max(1, Math.ceil(moreComments.totalCount / COMMENTS_PER_PAGE));
 
-	setCache(cacheKey, thread, 60);
-	return thread;
+	// Cache cursor for next page.
+	if (moreComments.pageInfo.endCursor && cursors.length < commentPage) {
+		commentCursorCache.set(number, [...cursors, moreComments.pageInfo.endCursor]);
+	}
+
+	const data = { ...page1, comments: moreComments, commentPage, totalCommentPages };
+	setCache(cacheKey, data, 60);
+	return data;
+}
+
+/** Strip HTML tags from emojiHTML and set it as the category emoji. */
+function parseCategoryEmoji(cat: any): any {
+	if (cat?.emojiHTML) cat.emoji = cat.emojiHTML.replace(/<[^>]*>/g, '').trim();
+	return cat;
+}
+
+export async function fetchPinnedDiscussions(userToken?: string | null) {
+	const cacheKey = 'pinnedDiscussions';
+	const cached = getCached<any[]>(cacheKey);
+	if (cached) return cached;
+
+	const owner = getRepoOwner();
+	const repo = getRepoName();
+	const token = await getReadToken(userToken);
+
+	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
+
+	const result: any = await executeGraphQLRead(token, (gql) =>
+		gql(
+			`query($owner: String!, $repo: String!) {
+				repository(owner: $owner, name: $repo) {
+					pinnedDiscussions(first: 8) {
+						nodes {
+							discussion {
+								id number title bodyText createdAt isAnswered
+								author { login avatarUrl url }
+								category { id name slug emoji emojiHTML }
+								labels(first: 10) { nodes { name color } }
+								comments { totalCount }
+								reactions { totalCount }
+							}
+						}
+					}
+				}
+			}`,
+			{ owner, repo }
+		)
+	);
+	const pinned = result.repository.pinnedDiscussions.nodes.map((n: any) => {
+		const d = n.discussion;
+		parseCategoryEmoji(d.category);
+		return d;
+	});
+
+	setCache(cacheKey, pinned, 60);
+	return pinned;
+}
+
+export async function fetchLatestDiscussions(first: number = 30, orderBy: string = 'UPDATED_AT', userToken?: string | null) {
+	const cacheKey = `latest:${first}:${orderBy}`;
+	const cached = getCached<any[]>(cacheKey);
+	if (cached) return cached;
+
+	const owner = getRepoOwner();
+	const repo = getRepoName();
+	const token = await getReadToken(userToken);
+
+	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
+
+	const result: any = await executeGraphQLRead(token, (gql) =>
+		gql(
+			`query($owner: String!, $repo: String!, $first: Int!, $orderBy: DiscussionOrderField!) {
+				repository(owner: $owner, name: $repo) {
+					discussions(first: $first, orderBy: { field: $orderBy, direction: DESC }) {
+						nodes {
+							id number title createdAt isAnswered
+							author { login avatarUrl url }
+							category { id name slug emoji emojiHTML }
+							labels(first: 10) { nodes { name color } }
+							comments { totalCount }
+							reactions { totalCount }
+						}
+					}
+				}
+			}`,
+			{ owner, repo, first, orderBy }
+		)
+	);
+	const discussions = result.repository.discussions.nodes.map((d: any) => {
+		parseCategoryEmoji(d.category);
+		return d;
+	});
+
+	setCache(cacheKey, discussions, 60);
+	return discussions;
+}
+
+/**
+ * Fetch top or trending discussions globally (or filtered by category slug) using
+ * GitHub's search API which supports reaction-count sorting.
+ * sort: 'top' = all-time most reactions, 'trending' = most reactions in past 30 days.
+ */
+export async function fetchTopDiscussions(
+	sort: 'top' | 'trending',
+	categorySlug?: string | null,
+	first: number = 30,
+	userToken?: string | null
+) {
+	const cacheKey = `top:${sort}:${categorySlug || ''}:${first}`;
+	const cached = getCached<any[]>(cacheKey);
+	if (cached) return cached;
+
+	const token = await getReadToken(userToken);
+	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
+
+	const owner = getRepoOwner();
+	const repo = getRepoName();
+
+	let searchQuery = `repo:${owner}/${repo} type:discussion sort:top`;
+	if (categorySlug) searchQuery += ` category:${categorySlug}`;
+	if (sort === 'trending') {
+		const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+		const monthAgo = new Date(Date.now() - THIRTY_DAYS_MS).toISOString().slice(0, 10);
+		searchQuery += ` created:>=${monthAgo}`;
+	}
+
+	const result: any = await executeGraphQLRead(token, (gql) =>
+		gql(
+			`query($searchQuery: String!, $first: Int!) {
+				search(query: $searchQuery, type: DISCUSSION, first: $first) {
+					nodes {
+						... on Discussion {
+							id number title createdAt isAnswered
+							author { login avatarUrl url }
+							category { id name slug emoji emojiHTML }
+							labels(first: 10) { nodes { name color } }
+							comments { totalCount }
+							reactions { totalCount }
+						}
+					}
+				}
+			}`,
+			{ searchQuery, first }
+		)
+	);
+
+	const discussions = (result.search.nodes as any[])
+		.filter((n: any) => n?.number)
+		.map((d: any) => { parseCategoryEmoji(d.category); return d; });
+
+	setCache(cacheKey, discussions, 60);
+	return discussions;
 }
 
 export async function fetchRepoId(userToken?: string | null) {

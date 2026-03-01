@@ -9,9 +9,9 @@
 	<title>{data.forumTitle}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+<div class="min-h-screen bg-amber-50 text-gray-900 dark:bg-[#1c1710] dark:text-gray-100">
 	<!-- Header -->
-	<header class="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+	<header class="border-b border-amber-200 bg-white shadow-sm dark:border-amber-900/40 dark:bg-[#241f14]">
 		<div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
 			<a href="/" class="flex items-center gap-2 text-xl font-bold text-orange-600 dark:text-orange-400">
 				{#if data.forumLogoUrl}
@@ -58,7 +58,7 @@
 	</main>
 
 	<!-- Footer -->
-	<footer class="border-t border-gray-200 py-6 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-500">
+	<footer class="border-t border-amber-200 py-6 text-center text-sm text-gray-500 dark:border-amber-900/40 dark:text-gray-500">
 		{#if data.forumFooterHtml}
 			{@html data.forumFooterHtml}
 		{:else}

@@ -141,7 +141,7 @@ This allows users to sign in and create threads/replies.
 
 5. Set on your **hosting platform's dashboard**:
    ```
-   GITHUB_OAUTH_CLIENT_ID=Iv1.xxxxxxxxx
+   GITHUB_OAUTH_CLIENT_ID=xxxxxxxxxxxxxxxxxx
    GITHUB_OAUTH_CLIENT_SECRET=xxxxxxxxxxxxxxxxxx
    BASE_URL=https://yourdomain.com
    ```

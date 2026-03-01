@@ -1,4 +1,4 @@
-import { fetchCategoryBySlug, fetchThreadsByPage, RateLimitError } from '$lib/server/github';
+import { fetchCategoryBySlug, fetchThreadsByPage, fetchPinnedDiscussions, RateLimitError } from '$lib/server/github';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -6,7 +6,10 @@ const PER_PAGE = 20;
 
 export const load: PageServerLoad = async ({ params, url, locals, setHeaders }) => {
 	try {
-		const category = await fetchCategoryBySlug(params.slug, locals.userToken);
+		const [category, allPinned] = await Promise.all([
+			fetchCategoryBySlug(params.slug, locals.userToken),
+			fetchPinnedDiscussions(locals.userToken).catch(() => [])
+		]);
 		if (!category) error(404, 'Category not found');
 
 		const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
@@ -19,10 +22,12 @@ export const load: PageServerLoad = async ({ params, url, locals, setHeaders }) 
 
 		const totalCount: number = discussions?.totalCount ?? 0;
 		const totalPages = Math.max(1, Math.ceil(totalCount / PER_PAGE));
+		const pinnedForCategory = (allPinned as any[]).filter((d: any) => d.category?.id === category.id);
 
 		return {
 			category,
 			threads: discussions?.nodes || [],
+			pinned: pinnedForCategory,
 			page,
 			totalPages,
 			totalCount,
@@ -34,6 +39,7 @@ export const load: PageServerLoad = async ({ params, url, locals, setHeaders }) 
 			return {
 				category: { name: params.slug.replace(/-/g, ' '), slug: params.slug, emoji: '', description: '', id: '' },
 				threads: [],
+				pinned: [],
 				page: 1,
 				totalPages: 1,
 				totalCount: 0,

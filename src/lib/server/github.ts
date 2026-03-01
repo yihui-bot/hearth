@@ -1,8 +1,7 @@
 import { graphql } from '@octokit/graphql';
 import { env } from '$env/dynamic/private';
 
-const COMMENTS_PER_PAGE = 50;
-const MAX_COMMENT_PAGES = 20;
+const COMMENTS_PER_PAGE = 100; // GitHub GraphQL max per request
 
 // ---------------------------------------------------------------------------
 // In-memory cache (server-side, survives across requests within one process)
@@ -312,6 +311,10 @@ export async function fetchCategories(userToken?: string | null) {
 // ---------------------------------------------------------------------------
 const pageCursorCache = new Map<string, string[]>();
 
+// Comment-page cursor cache: Map<threadNumber, string[]>
+// cursors[i] = endCursor after comment page i+1 (used to fetch page i+2).
+const commentCursorCache = new Map<number, string[]>();
+
 export async function fetchCategoryBySlug(slug: string, userToken?: string | null) {
 	const categories = await fetchCategories(userToken);
 	return categories.find((c: any) => c.slug === slug) || null;
@@ -342,8 +345,9 @@ export async function fetchThreadsByCategory(
 						totalCount
 						pageInfo { hasNextPage endCursor }
 						nodes {
-							id number title createdAt
+							id number title createdAt isPinned
 							author { login avatarUrl url }
+							labels(first: 10) { nodes { name color } }
 							comments { totalCount }
 							reactions { totalCount }
 						}
@@ -400,8 +404,8 @@ export async function fetchThreadsByPage(
 	return data;
 }
 
-export async function fetchThread(number: number, userToken?: string | null) {
-	const cacheKey = `thread:${number}`;
+export async function fetchThread(number: number, commentPage: number = 1, userToken?: string | null): Promise<any> {
+	const cacheKey = `thread:${number}:cp:${commentPage}`;
 	const cached = getCached<any>(cacheKey);
 	if (cached) return cached;
 
@@ -411,22 +415,130 @@ export async function fetchThread(number: number, userToken?: string | null) {
 
 	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
 
-	const result: any = await executeGraphQLRead(token, (gql) =>
+	// For page 1 we fetch full thread metadata + first page of comments.
+	if (commentPage === 1) {
+		const result: any = await executeGraphQLRead(token, (gql) =>
+			gql(
+				`query($owner: String!, $repo: String!, $number: Int!) {
+					repository(owner: $owner, name: $repo) {
+						discussion(number: $number) {
+							id number title body bodyHTML createdAt isPinned
+							author { login avatarUrl url }
+							category { name slug }
+							labels(first: 10) { nodes { name color } }
+							reactionGroups {
+								content
+								reactors(first: 10) {
+									totalCount
+									nodes { ... on User { login } }
+								}
+							}
+							comments(first: ${COMMENTS_PER_PAGE}) {
+								totalCount
+								pageInfo { hasNextPage endCursor }
+								nodes {
+									id body bodyHTML createdAt
+									author { login avatarUrl url }
+									reactionGroups {
+										content
+										reactors(first: 10) {
+											totalCount
+											nodes { ... on User { login } }
+										}
+									}
+									replies(first: 20) {
+										nodes {
+											id body bodyHTML createdAt
+											author { login avatarUrl url }
+										}
+									}
+								}
+							}
+						}
+					}
+				}`,
+				{ owner, repo, number }
+			)
+		);
+		const thread = result.repository.discussion;
+		const totalCommentPages = Math.max(1, Math.ceil(thread.comments.totalCount / COMMENTS_PER_PAGE));
+
+		// Cache cursor for page 2
+		if (thread.comments.pageInfo.endCursor) {
+			const existing = commentCursorCache.get(number) || [];
+			if (existing.length === 0) {
+				commentCursorCache.set(number, [thread.comments.pageInfo.endCursor]);
+			}
+		}
+
+		const data = { ...thread, commentPage: 1, totalCommentPages };
+		setCache(cacheKey, data, 60);
+		return data;
+	}
+
+	// Page > 1: ensure page-1 data is loaded so we have cursor chain started.
+	let cursors = commentCursorCache.get(number) || [];
+	if (cursors.length === 0) {
+		await fetchThread(number, 1, userToken);
+		cursors = commentCursorCache.get(number) || [];
+	}
+
+	// Build cursor chain up to commentPage - 1.
+	if (cursors.length < commentPage - 1) {
+		for (let p = cursors.length + 1; p < commentPage; p++) {
+			const prevCursor = cursors[p - 2];
+			if (!prevCursor) break;
+			const intermediate: any = await executeGraphQLRead(token, (gql) =>
+				gql(
+					`query($owner: String!, $repo: String!, $number: Int!, $after: String!) {
+						repository(owner: $owner, name: $repo) {
+							discussion(number: $number) {
+								comments(first: ${COMMENTS_PER_PAGE}, after: $after) {
+									pageInfo { endCursor }
+								}
+							}
+						}
+					}`,
+					{ owner, repo, number, after: prevCursor }
+				)
+			);
+			const endCursor = intermediate.repository.discussion.comments.pageInfo.endCursor;
+			if (endCursor) {
+				cursors = [...cursors, endCursor];
+				commentCursorCache.set(number, cursors);
+			} else {
+				break;
+			}
+		}
+	}
+
+	const cursor = cursors[commentPage - 2];
+	if (!cursor) {
+		// Requested page out of range; fall back to page 1.
+		return fetchThread(number, 1, userToken);
+	}
+
+	// Fetch thread metadata from page 1 cache + comments for requested page.
+	const page1 = await fetchThread(number, 1, userToken);
+
+	const commentsResult: any = await executeGraphQLRead(token, (gql) =>
 		gql(
-			`query($owner: String!, $repo: String!, $number: Int!) {
+			`query($owner: String!, $repo: String!, $number: Int!, $after: String!) {
 				repository(owner: $owner, name: $repo) {
 					discussion(number: $number) {
-						id title body bodyHTML createdAt
-						author { login avatarUrl url }
-						category { name slug }
-						reactions(first: 10) { nodes { content } totalCount }
-						comments(first: ${COMMENTS_PER_PAGE}) {
+						comments(first: ${COMMENTS_PER_PAGE}, after: $after) {
 							totalCount
 							pageInfo { hasNextPage endCursor }
 							nodes {
 								id body bodyHTML createdAt
 								author { login avatarUrl url }
-								reactions(first: 10) { nodes { content } totalCount }
+								reactionGroups {
+									content
+									reactors(first: 10) {
+										totalCount
+										nodes { ... on User { login } }
+									}
+								}
 								replies(first: 20) {
 									nodes {
 										id body bodyHTML createdAt
@@ -438,61 +550,107 @@ export async function fetchThread(number: number, userToken?: string | null) {
 					}
 				}
 			}`,
-			{ owner, repo, number }
+			{ owner, repo, number, after: cursor }
 		)
 	);
-	let thread = result.repository.discussion;
+	const moreComments = commentsResult.repository.discussion.comments;
+	const totalCommentPages = Math.max(1, Math.ceil(moreComments.totalCount / COMMENTS_PER_PAGE));
 
-	// Auto-load remaining comment pages so the full thread is always shown.
-	// Allow up to MAX_COMMENT_PAGES extra pages before stopping.
-	if (thread?.comments?.pageInfo?.hasNextPage) {
-		const allNodes = [...thread.comments.nodes];
-		let pageInfo = thread.comments.pageInfo;
-		let safetyLimit = MAX_COMMENT_PAGES;
-
-		while (pageInfo.hasNextPage && safetyLimit-- > 0) {
-			const more: any = await executeGraphQLRead(token, (gql) =>
-				gql(
-					`query($owner: String!, $repo: String!, $number: Int!, $after: String!) {
-						repository(owner: $owner, name: $repo) {
-							discussion(number: $number) {
-								comments(first: ${COMMENTS_PER_PAGE}, after: $after) {
-									pageInfo { hasNextPage endCursor }
-									nodes {
-										id body bodyHTML createdAt
-										author { login avatarUrl url }
-										reactions(first: 10) { nodes { content } totalCount }
-										replies(first: 20) {
-											nodes {
-												id body bodyHTML createdAt
-												author { login avatarUrl url }
-											}
-										}
-									}
-								}
-							}
-						}
-					}`,
-					{ owner, repo, number, after: pageInfo.endCursor }
-				)
-			);
-			const moreComments = more.repository.discussion.comments;
-			allNodes.push(...moreComments.nodes);
-			pageInfo = moreComments.pageInfo;
-		}
-
-		thread = {
-			...thread,
-			comments: {
-				...thread.comments,
-				nodes: allNodes,
-				pageInfo
-			}
-		};
+	// Cache cursor for next page.
+	if (moreComments.pageInfo.endCursor && cursors.length < commentPage) {
+		commentCursorCache.set(number, [...cursors, moreComments.pageInfo.endCursor]);
 	}
 
-	setCache(cacheKey, thread, 60);
-	return thread;
+	const data = { ...page1, comments: moreComments, commentPage, totalCommentPages };
+	setCache(cacheKey, data, 60);
+	return data;
+}
+
+/** Strip HTML tags from emojiHTML and set it as the category emoji. */
+function parseCategoryEmoji(cat: any): any {
+	if (cat?.emojiHTML) cat.emoji = cat.emojiHTML.replace(/<[^>]*>/g, '').trim();
+	return cat;
+}
+
+export async function fetchPinnedDiscussions(userToken?: string | null) {
+	const cacheKey = 'pinnedDiscussions';
+	const cached = getCached<any[]>(cacheKey);
+	if (cached) return cached;
+
+	const owner = getRepoOwner();
+	const repo = getRepoName();
+	const token = await getReadToken(userToken);
+
+	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
+
+	const result: any = await executeGraphQLRead(token, (gql) =>
+		gql(
+			`query($owner: String!, $repo: String!) {
+				repository(owner: $owner, name: $repo) {
+					pinnedDiscussions(first: 8) {
+						nodes {
+							discussion {
+								id number title createdAt isPinned
+								author { login avatarUrl url }
+								category { id name slug emoji emojiHTML }
+								labels(first: 10) { nodes { name color } }
+								comments { totalCount }
+								reactions { totalCount }
+							}
+						}
+					}
+				}
+			}`,
+			{ owner, repo }
+		)
+	);
+	const pinned = result.repository.pinnedDiscussions.nodes.map((n: any) => {
+		const d = n.discussion;
+		parseCategoryEmoji(d.category);
+		return d;
+	});
+
+	setCache(cacheKey, pinned, 60);
+	return pinned;
+}
+
+export async function fetchLatestDiscussions(first: number = 30, userToken?: string | null) {
+	const cacheKey = `latest:${first}`;
+	const cached = getCached<any[]>(cacheKey);
+	if (cached) return cached;
+
+	const owner = getRepoOwner();
+	const repo = getRepoName();
+	const token = await getReadToken(userToken);
+
+	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
+
+	const result: any = await executeGraphQLRead(token, (gql) =>
+		gql(
+			`query($owner: String!, $repo: String!, $first: Int!) {
+				repository(owner: $owner, name: $repo) {
+					discussions(first: $first, orderBy: { field: UPDATED_AT, direction: DESC }) {
+						nodes {
+							id number title createdAt isPinned
+							author { login avatarUrl url }
+							category { id name slug emoji emojiHTML }
+							labels(first: 10) { nodes { name color } }
+							comments { totalCount }
+							reactions { totalCount }
+						}
+					}
+				}
+			}`,
+			{ owner, repo, first }
+		)
+	);
+	const discussions = result.repository.discussions.nodes.map((d: any) => {
+		parseCategoryEmoji(d.category);
+		return d;
+	});
+
+	setCache(cacheKey, discussions, 60);
+	return discussions;
 }
 
 export async function fetchRepoId(userToken?: string | null) {

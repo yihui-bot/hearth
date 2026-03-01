@@ -218,7 +218,7 @@
 				<div class="text-center py-4">
 					<p class="text-gray-500 dark:text-gray-400 mb-3">Sign in to join the discussion</p>
 					<a
-						href="/auth/login?redirect=/t/{data.thread.number}/{encodeURIComponent(data.thread.title)}"
+						href="/auth/login?redirect=/t/{data.thread.number}"
 						class="inline-block rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
 					>
 						Sign in with GitHub

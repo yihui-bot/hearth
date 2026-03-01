@@ -1,7 +1,27 @@
 <script lang="ts">
-	import { timeAgo, slugify } from '$lib/utils';
+	import { timeAgo } from '$lib/utils';
 
 	let { data } = $props();
+
+	const PAGES_AROUND_CURRENT = 2;
+	const MAX_PAGES_WITHOUT_ELLIPSIS = 7;
+
+	function pageUrl(p: number) {
+		return `/c/${data.category.slug}?page=${p}&sort=${data.sort}`;
+	}
+
+	// Build the list of page numbers to show (always first, last, current ±PAGES_AROUND_CURRENT, with ellipsis)
+	function pageNumbers(current: number, total: number): (number | null)[] {
+		if (total <= MAX_PAGES_WITHOUT_ELLIPSIS) return Array.from({ length: total }, (_, i) => i + 1);
+		const pages: (number | null)[] = [];
+		const add = (n: number) => { if (!pages.includes(n)) pages.push(n); };
+		add(1);
+		if (current - PAGES_AROUND_CURRENT > 2) pages.push(null); // left ellipsis
+		for (let p = Math.max(2, current - PAGES_AROUND_CURRENT); p <= Math.min(total - 1, current + PAGES_AROUND_CURRENT); p++) add(p);
+		if (current + PAGES_AROUND_CURRENT < total - 1) pages.push(null); // right ellipsis
+		add(total);
+		return pages;
+	}
 </script>
 
 <svelte:head>
@@ -58,7 +78,7 @@
 			<div class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
 				{#each data.threads as thread}
 					<a
-						href="/t/{thread.number}/{slugify(thread.title)}"
+						href="/t/{thread.number}"
 						class="flex items-center gap-4 px-4 py-3 transition hover:bg-gray-50 dark:hover:bg-gray-800/50"
 					>
 						{#if thread.author}
@@ -84,15 +104,26 @@
 				{/each}
 			</div>
 
-			{#if data.pageInfo.hasNextPage}
-				<div class="text-center">
-					<a
-						href="/c/{data.category.slug}?after={data.pageInfo.endCursor}&sort={data.sort}"
-						class="inline-block rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-					>
-						Load more →
-					</a>
-				</div>
+			{#if data.totalPages > 1}
+				<nav class="flex items-center justify-center gap-1 text-sm" aria-label="Pagination">
+					{#if data.page > 1}
+						<a href={pageUrl(data.page - 1)} class="rounded border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">‹</a>
+					{/if}
+					{#each pageNumbers(data.page, data.totalPages) as p}
+						{#if p === null}
+							<span class="px-1 text-gray-400">…</span>
+						{:else}
+							<a
+								href={pageUrl(p)}
+								class="rounded border px-3 py-1.5 {p === data.page ? 'border-orange-500 bg-orange-50 font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'}"
+								aria-current={p === data.page ? 'page' : undefined}
+							>{p}</a>
+						{/if}
+					{/each}
+					{#if data.page < data.totalPages}
+						<a href={pageUrl(data.page + 1)} class="rounded border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">›</a>
+					{/if}
+				</nav>
 			{/if}
 		{/if}
 	{/if}

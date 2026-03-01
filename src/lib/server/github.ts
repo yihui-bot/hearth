@@ -1,6 +1,9 @@
 import { graphql } from '@octokit/graphql';
 import { env } from '$env/dynamic/private';
 
+const COMMENTS_PER_PAGE = 50;
+const MAX_COMMENT_PAGES = 20;
+
 // ---------------------------------------------------------------------------
 // In-memory cache (server-side, survives across requests within one process)
 // ---------------------------------------------------------------------------
@@ -284,18 +287,30 @@ export async function fetchCategories(userToken?: string | null) {
 			`query($owner: String!, $repo: String!) {
 				repository(owner: $owner, name: $repo) {
 					discussionCategories(first: 20) {
-						nodes { id name description emoji slug }
+						nodes { id name description emoji emojiHTML slug }
 					}
 				}
 			}`,
 			{ owner, repo }
 		)
 	);
-	const categories = result.repository.discussionCategories.nodes;
+	// Replace the shortcode emoji (e.g. ":speaking_head:") with the actual
+	// Unicode character extracted from the emojiHTML field (e.g. "<div>🗣</div>").
+	const categories = result.repository.discussionCategories.nodes.map((cat: any) => ({
+		...cat,
+		emoji: cat.emojiHTML ? cat.emojiHTML.replace(/<[^>]*>/g, '').trim() : cat.emoji
+	}));
 
 	setCache(cacheKey, categories, 120);
 	return categories;
 }
+
+// ---------------------------------------------------------------------------
+// Page-cursor cache for numbered pagination (server-side, per process)
+// Key: `${categoryId}:${orderBy}`, Value: array of endCursors where
+// cursors[i] is the endCursor after page i+1 (used to fetch page i+2).
+// ---------------------------------------------------------------------------
+const pageCursorCache = new Map<string, string[]>();
 
 export async function fetchCategoryBySlug(slug: string, userToken?: string | null) {
 	const categories = await fetchCategories(userToken);
@@ -324,6 +339,7 @@ export async function fetchThreadsByCategory(
 			`query($owner: String!, $repo: String!, $categoryId: ID!, $first: Int!, $after: String, $orderBy: DiscussionOrderField!) {
 				repository(owner: $owner, name: $repo) {
 					discussions(first: $first, categoryId: $categoryId, after: $after, orderBy: { field: $orderBy, direction: DESC }) {
+						totalCount
 						pageInfo { hasNextPage endCursor }
 						nodes {
 							id number title createdAt
@@ -341,6 +357,47 @@ export async function fetchThreadsByCategory(
 
 	setCache(cacheKey, discussions, 60);
 	return discussions;
+}
+
+/**
+ * Fetch a specific page of threads for a category.
+ * Uses a server-side cursor cache so any page can be accessed directly.
+ * On first access of page N, pages 1…N-1 are fetched to build the cursor chain.
+ */
+export async function fetchThreadsByPage(
+	categoryId: string,
+	page: number,
+	perPage: number = 20,
+	orderBy: string = 'UPDATED_AT',
+	userToken?: string | null
+) {
+	const storeKey = `${categoryId}:${orderBy}`;
+	let cursors = pageCursorCache.get(storeKey) || [];
+
+	// Build up cursors up to the page we need (cursors[i] = endCursor of page i+1)
+	if (page > 1 && cursors.length < page - 1) {
+		for (let p = cursors.length + 1; p < page; p++) {
+			const prevCursor = cursors.length > 0 ? cursors[cursors.length - 1] : undefined;
+			const res = await fetchThreadsByCategory(categoryId, perPage, prevCursor, orderBy, userToken);
+			if (res?.pageInfo?.endCursor) {
+				cursors = [...cursors, res.pageInfo.endCursor];
+				pageCursorCache.set(storeKey, cursors);
+			} else {
+				break; // No more pages
+			}
+		}
+	}
+
+	const cursor = page > 1 ? cursors[page - 2] : undefined;
+	const data = await fetchThreadsByCategory(categoryId, perPage, cursor, orderBy, userToken);
+
+	// Cache endCursor for next page
+	if (data?.pageInfo?.hasNextPage && data.pageInfo.endCursor && cursors.length < page) {
+		cursors = [...cursors, data.pageInfo.endCursor];
+		pageCursorCache.set(storeKey, cursors);
+	}
+
+	return data;
 }
 
 export async function fetchThread(number: number, userToken?: string | null) {
@@ -363,7 +420,7 @@ export async function fetchThread(number: number, userToken?: string | null) {
 						author { login avatarUrl url }
 						category { name slug }
 						reactions(first: 10) { nodes { content } totalCount }
-						comments(first: 50) {
+						comments(first: ${COMMENTS_PER_PAGE}) {
 							totalCount
 							pageInfo { hasNextPage endCursor }
 							nodes {
@@ -384,7 +441,55 @@ export async function fetchThread(number: number, userToken?: string | null) {
 			{ owner, repo, number }
 		)
 	);
-	const thread = result.repository.discussion;
+	let thread = result.repository.discussion;
+
+	// Auto-load remaining comment pages so the full thread is always shown.
+	// Allow up to MAX_COMMENT_PAGES extra pages before stopping.
+	if (thread?.comments?.pageInfo?.hasNextPage) {
+		const allNodes = [...thread.comments.nodes];
+		let pageInfo = thread.comments.pageInfo;
+		let safetyLimit = MAX_COMMENT_PAGES;
+
+		while (pageInfo.hasNextPage && safetyLimit-- > 0) {
+			const more: any = await executeGraphQLRead(token, (gql) =>
+				gql(
+					`query($owner: String!, $repo: String!, $number: Int!, $after: String!) {
+						repository(owner: $owner, name: $repo) {
+							discussion(number: $number) {
+								comments(first: ${COMMENTS_PER_PAGE}, after: $after) {
+									pageInfo { hasNextPage endCursor }
+									nodes {
+										id body bodyHTML createdAt
+										author { login avatarUrl url }
+										reactions(first: 10) { nodes { content } totalCount }
+										replies(first: 20) {
+											nodes {
+												id body bodyHTML createdAt
+												author { login avatarUrl url }
+											}
+										}
+									}
+								}
+							}
+						}
+					}`,
+					{ owner, repo, number, after: pageInfo.endCursor }
+				)
+			);
+			const moreComments = more.repository.discussion.comments;
+			allNodes.push(...moreComments.nodes);
+			pageInfo = moreComments.pageInfo;
+		}
+
+		thread = {
+			...thread,
+			comments: {
+				...thread.comments,
+				nodes: allNodes,
+				pageInfo
+			}
+		};
+	}
 
 	setCache(cacheKey, thread, 60);
 	return thread;

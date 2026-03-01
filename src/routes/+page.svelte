@@ -98,9 +98,6 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 <div class="min-w-0 flex-1">
 <div class="flex flex-wrap items-center gap-2">
 <span class="truncate font-medium text-gray-900 dark:text-gray-100">{thread.title}</span>
-{#if thread.isPinned}
-<span class="shrink-0 text-orange-500" title="Pinned">📌</span>
-{/if}
 {#if thread.labels?.nodes?.length > 0}
 {#each thread.labels.nodes as label}
 <span class="rounded-full border px-1.5 py-0 text-xs font-medium"

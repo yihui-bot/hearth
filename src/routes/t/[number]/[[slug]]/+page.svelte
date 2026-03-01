@@ -71,9 +71,6 @@ replying = false;
 <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
 <div class="flex flex-wrap items-start gap-2">
 <h1 class="flex-1 text-xl font-bold text-gray-900 dark:text-gray-100">{data.thread.title}</h1>
-{#if data.thread.isPinned}
-<span class="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">📌 Pinned</span>
-{/if}
 </div>
 {#if data.thread.labels?.nodes?.length > 0}
 <div class="mt-2 flex flex-wrap gap-1.5">

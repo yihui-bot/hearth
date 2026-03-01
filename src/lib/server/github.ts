@@ -345,7 +345,7 @@ export async function fetchThreadsByCategory(
 						totalCount
 						pageInfo { hasNextPage endCursor }
 						nodes {
-							id number title createdAt isPinned
+							id number title createdAt
 							author { login avatarUrl url }
 							labels(first: 10) { nodes { name color } }
 							comments { totalCount }
@@ -422,7 +422,7 @@ export async function fetchThread(number: number, commentPage: number = 1, userT
 				`query($owner: String!, $repo: String!, $number: Int!) {
 					repository(owner: $owner, name: $repo) {
 						discussion(number: $number) {
-							id number title body bodyHTML createdAt isPinned
+							id number title body bodyHTML createdAt
 							author { login avatarUrl url }
 							category { name slug }
 							labels(first: 10) { nodes { name color } }
@@ -590,7 +590,7 @@ export async function fetchPinnedDiscussions(userToken?: string | null) {
 					pinnedDiscussions(first: 8) {
 						nodes {
 							discussion {
-								id number title createdAt isPinned
+								id number title createdAt
 								author { login avatarUrl url }
 								category { id name slug emoji emojiHTML }
 								labels(first: 10) { nodes { name color } }
@@ -631,7 +631,7 @@ export async function fetchLatestDiscussions(first: number = 30, userToken?: str
 				repository(owner: $owner, name: $repo) {
 					discussions(first: $first, orderBy: { field: UPDATED_AT, direction: DESC }) {
 						nodes {
-							id number title createdAt isPinned
+							id number title createdAt
 							author { login avatarUrl url }
 							category { id name slug emoji emojiHTML }
 							labels(first: 10) { nodes { name color } }

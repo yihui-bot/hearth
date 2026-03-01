@@ -23,14 +23,11 @@ Gitorum looks and feels like a modern forum but requires **zero backend infrastr
 # Install dependencies
 npm install
 
-# Copy and fill in environment variables
-cp .env.example .env
-
-# Start dev server
+# Start dev server (requires GitHub App env vars)
 npm run dev
 ```
 
-At minimum, set `GITHUB_REPO_OWNER` and `GITHUB_REPO_NAME` to point at a repository with Discussions enabled. The forum works immediately with anonymous API access (60 req/hr). See [SETUP.md](SETUP.md) for full configuration including GitHub App and OAuth setup.
+Set `GITHUB_REPO_OWNER` and `GITHUB_REPO_NAME` to point at a repository with Discussions enabled, and configure a GitHub App for API access. See [SETUP.md](SETUP.md) for full configuration including GitHub App, OAuth setup, and secrets management best practices.
 
 ## Documentation
 

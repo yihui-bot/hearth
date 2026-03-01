@@ -16,11 +16,9 @@ This guide walks you through setting up Gitorum as a forum administrator.
 
 ## 2. Environment Variables
 
-Copy `.env.example` to `.env` and fill in the values:
+Gitorum is configured entirely through environment variables. **Secret variables (tokens, keys, client secrets) should never be stored in `.env` files committed to version control.** Instead, set them via your hosting platform's dashboard (see [Deployment](#6-deployment)).
 
-```bash
-cp .env.example .env
-```
+The `.env.example` file documents all supported variables but does not contain real values. For local development, you can create a `.env` file — just make sure it stays in `.gitignore` (which it is by default).
 
 ### Required
 
@@ -29,7 +27,15 @@ cp .env.example .env
 | `GITHUB_REPO_OWNER` | GitHub username or org that owns the Discussions repo |
 | `GITHUB_REPO_NAME` | Name of the repo with Discussions enabled |
 
-### Optional — Authentication (for posting)
+### GitHub App (required for API access)
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_APP_ID` | Your GitHub App's numeric ID |
+| `GITHUB_APP_PRIVATE_KEY` | Contents of the `.pem` private key (replace newlines with `\n`) |
+| `GITHUB_APP_INSTALLATION_ID` | The installation ID for your repository |
+
+### OAuth (for user sign-in / posting)
 
 | Variable | Description |
 |----------|-------------|
@@ -37,7 +43,7 @@ cp .env.example .env
 | `GITHUB_OAUTH_CLIENT_SECRET` | From your GitHub OAuth App |
 | `BASE_URL` | Your production URL (e.g. `https://forum.example.com`) |
 
-### Optional — Customization
+### Customization (optional)
 
 | Variable | Description |
 |----------|-------------|
@@ -45,15 +51,16 @@ cp .env.example .env
 | `FORUM_LOGO_URL` | URL to a custom logo image (replaces the default SVG icon) |
 | `FORUM_FOOTER_HTML` | Custom footer content in Markdown format (rendered and sanitized before display) |
 
-### API Rate Limits
+### Secrets Best Practices
 
-Gitorum reads from the GitHub API. Without any server-side token, it uses anonymous access (**60 requests/hour**). This is fine for personal or low-traffic forums.
-
-For higher traffic, set up a **GitHub App** (see below) which provides **5,000 requests/hour** with automatic token renewal. When a GitHub App token hits its rate limit, Gitorum automatically requests a fresh token and retries.
+- **Never commit secrets to git.** The `.env` file is in `.gitignore` by default.
+- **Use your hosting platform's environment variable settings** to configure secrets in production (Cloudflare dashboard, Vercel dashboard, etc.).
+- **Rotate secrets regularly.** GitHub App private keys and OAuth client secrets can be regenerated from the GitHub settings pages.
+- **Keep the private key secure.** The `.pem` file downloaded when creating a GitHub App contains the private key. Store it securely and delete it after copying the value to your hosting platform.
 
 ---
 
-## 3. Setting Up a GitHub App (Recommended for Production)
+## 3. Setting Up a GitHub App (Required)
 
 A GitHub App provides automatic short-lived token generation (tokens expire after 1 hour and are renewed automatically). When a token's rate limit is exhausted, Gitorum will automatically generate a new one and retry the request.
 
@@ -81,7 +88,7 @@ A GitHub App provides automatic short-lived token generation (tokens expire afte
 
 1. On the App settings page, scroll to "Private keys"
 2. Click **Generate a private key**
-3. A `.pem` file will download — keep it safe
+3. A `.pem` file will download — keep it safe and delete it after copying the value
 
 ### Step 3: Install the App on Your Repo
 
@@ -102,9 +109,11 @@ You need three values:
 
 ### Step 5: Set Environment Variables
 
+Set these on your **hosting platform's dashboard** (not in `.env` files):
+
 ```
 GITHUB_APP_ID=123456
-GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"
+GITHUB_APP_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----
 GITHUB_APP_INSTALLATION_ID=12345678
 ```
 
@@ -128,7 +137,7 @@ This allows users to sign in and create threads/replies.
 
 4. Copy the **Client ID** and generate a **Client Secret**
 
-5. Set in your `.env`:
+5. Set on your **hosting platform's dashboard**:
    ```
    GITHUB_OAUTH_CLIENT_ID=Iv1.xxxxxxxxx
    GITHUB_OAUTH_CLIENT_SECRET=xxxxxxxxxxxxxxxxxx
@@ -207,7 +216,7 @@ If you prefer Page Rules:
    - **Build command**: `npm run build`
    - **Build output directory**: `.svelte-kit/cloudflare`
    - **Node.js version**: `18` or later
-4. Add all environment variables in Settings → Environment variables
+4. **Add all environment variables in Settings → Environment variables** — this is where secrets (App private key, OAuth client secret) should be set
 5. Set the OAuth callback URL in your GitHub OAuth App to match your production domain
 
 ### Vercel
@@ -215,30 +224,25 @@ If you prefer Page Rules:
 1. Push your code to GitHub
 2. Import the repo in Vercel dashboard
 3. Vercel auto-detects SvelteKit — no special config needed
-4. Add all environment variables in Project Settings → Environment Variables
+4. **Add all environment variables in Project Settings → Environment Variables** — this is where secrets should be set
 5. Set the OAuth callback URL in your GitHub OAuth App to match your production domain
 
 ---
 
-## 7. Complete Environment Variables Reference
+## 7. Environment Variables Reference
 
-```bash
-# Required
-GITHUB_REPO_OWNER=your-org-or-username
-GITHUB_REPO_NAME=your-forum-data-repo
+The following variables are supported. **Set secret values on your hosting platform, not in code.**
 
-# GitHub App (recommended for production)
-GITHUB_APP_ID=123456
-GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
-GITHUB_APP_INSTALLATION_ID=12345678
-
-# OAuth (for user sign-in/posting)
-GITHUB_OAUTH_CLIENT_ID=Iv1.xxxxxxxxx
-GITHUB_OAUTH_CLIENT_SECRET=xxxxxxxxxxxxxxxxxx
-BASE_URL=https://yourdomain.com
-
-# Customization (optional)
-FORUM_TITLE=My Forum
-FORUM_LOGO_URL=https://example.com/logo.svg
-FORUM_FOOTER_HTML=Powered by [Gitorum](https://github.com) · [My Site](https://example.com)
-```
+| Variable | Required | Secret | Description |
+|----------|----------|--------|-------------|
+| `GITHUB_REPO_OWNER` | Yes | No | Repository owner |
+| `GITHUB_REPO_NAME` | Yes | No | Repository name |
+| `GITHUB_APP_ID` | Yes | No | GitHub App numeric ID |
+| `GITHUB_APP_PRIVATE_KEY` | Yes | **Yes** | GitHub App private key (PEM format, `\n`-escaped) |
+| `GITHUB_APP_INSTALLATION_ID` | Yes | No | GitHub App installation ID |
+| `GITHUB_OAUTH_CLIENT_ID` | For auth | No | OAuth App client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | For auth | **Yes** | OAuth App client secret |
+| `BASE_URL` | For auth | No | Production URL for OAuth callback |
+| `FORUM_TITLE` | No | No | Custom forum title |
+| `FORUM_LOGO_URL` | No | No | Custom logo image URL |
+| `FORUM_FOOTER_HTML` | No | No | Custom footer (Markdown) |

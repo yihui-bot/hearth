@@ -6,9 +6,9 @@
 - **Data layer**: GitHub GraphQL API via Octokit (`@octokit/graphql`)
 - **Auth**: GitHub OAuth App — standard OAuth 2.0 flow
 - **Token strategy**:
-  1. **GitHub App installation tokens** (preferred) — auto-generated, short-lived, 5,000 req/hr
-  2. **Personal Access Token** (fallback) — set `GITHUB_SERVER_TOKEN`, 5,000 req/hr
-  3. **Anonymous** — no token configured, 60 req/hr with user login prompt
+  1. **GitHub App installation tokens** (required) — auto-generated, short-lived, 5,000 req/hr with automatic renewal on rate limit
+  2. **User OAuth token** (for writes) — from httpOnly cookie after sign-in
+- **Secrets management**: All secrets (App private key, OAuth client secret) are set as server-side environment variables on the hosting platform — never committed to version control
 - **Caching**: Two-layer — in-memory server cache + HTTP `Cache-Control` headers for CDN/edge
 - **Hosting**: Cloudflare Pages or Vercel — free tier is sufficient
 - **No database. No user table. No file storage.**
@@ -173,8 +173,8 @@ mutation($discussionId: ID!, $body: String!) {
 
 ## Rate Limiting Strategy
 
-- All **read requests** go through server-side routes using the server token (PAT or GitHub App installation token) — never exposed to the client
-- If no token is configured, reads use anonymous access (60 req/hr) with a banner prompting users to sign in
+- All **read requests** go through server-side routes using the GitHub App installation token — never exposed to the client
+- GitHub App tokens are short-lived (1 hour) and automatically renewed; on rate limit, Gitorum invalidates the cached token and requests a fresh one
 - All **write requests** use the authenticated user's own OAuth token — rate limits are per-user
 - In-memory cache (TTL-based) deduplicates requests within a single process
 - HTTP `Cache-Control` headers with `s-maxage` enable CDN/edge caching (Cloudflare, Vercel)
@@ -196,7 +196,7 @@ mutation($discussionId: ID!, $body: String!) {
 - Tailwind CSS — no heavy UI framework
 - Mobile-responsive
 - Dark mode via Tailwind's `dark:` classes
-- Indigo accent color for brand consistency
+- Orange accent color for warm brand identity
 
 ---
 

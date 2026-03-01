@@ -8,8 +8,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		redirect(302, '/auth/login?redirect=/new');
 	}
 
-	const categories = await fetchCategories(locals.userToken);
-	return { categories: categories || [] };
+	try {
+		const categories = await fetchCategories(locals.userToken);
+		return { categories: categories || [] };
+	} catch (err) {
+		console.error('Failed to load categories for new thread page:', err);
+		error(503, 'Could not load discussion categories. Please check your GitHub App configuration.');
+	}
 };
 
 export const actions: Actions = {

@@ -1,4 +1,5 @@
 import { fetchCategories, RateLimitError } from '$lib/server/github';
+import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, setHeaders }) => {
@@ -10,6 +11,6 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 		if (err instanceof RateLimitError) {
 			return { categories: null, rateLimited: true };
 		}
-		throw err;
+		error(503, err instanceof Error ? err.message : 'Failed to load categories');
 	}
 };

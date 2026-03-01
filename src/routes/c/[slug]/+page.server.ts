@@ -32,6 +32,6 @@ export const load: PageServerLoad = async ({ params, url, locals, setHeaders }) 
 				rateLimited: true
 			};
 		}
-		throw err;
+		error(503, err instanceof Error ? err.message : 'Failed to load category');
 	}
 };

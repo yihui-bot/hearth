@@ -53,6 +53,44 @@ interface AppToken {
 	expiresAt: number;
 }
 
+/**
+ * Encode a DER length value.
+ */
+function derLength(len: number): number[] {
+	if (len < 128) return [len];
+	if (len < 256) return [0x81, len];
+	return [0x82, (len >> 8) & 0xff, len & 0xff];
+}
+
+/**
+ * Convert a PKCS#1 RSA private key (DER) to PKCS#8 (unencrypted PrivateKeyInfo).
+ * GitHub App private keys are downloaded in PKCS#1 format; Web Crypto requires PKCS#8.
+ */
+function pkcs1ToPkcs8(pkcs1: Uint8Array): Uint8Array {
+	// AlgorithmIdentifier: SEQUENCE { OID rsaEncryption (1.2.840.113549.1.1.1), NULL }
+	const algorithmId = new Uint8Array([
+		0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00
+	]);
+	const versionBytes = new Uint8Array([0x02, 0x01, 0x00]); // INTEGER 0
+	const octetHeader = new Uint8Array([0x04, ...derLength(pkcs1.length)]);
+	const innerLen =
+		versionBytes.length + algorithmId.length + octetHeader.length + pkcs1.length;
+	const seqHeader = new Uint8Array([0x30, ...derLength(innerLen)]);
+
+	const pkcs8 = new Uint8Array(seqHeader.length + innerLen);
+	let offset = 0;
+	pkcs8.set(seqHeader, offset);
+	offset += seqHeader.length;
+	pkcs8.set(versionBytes, offset);
+	offset += versionBytes.length;
+	pkcs8.set(algorithmId, offset);
+	offset += algorithmId.length;
+	pkcs8.set(octetHeader, offset);
+	offset += octetHeader.length;
+	pkcs8.set(pkcs1, offset);
+	return pkcs8;
+}
+
 let appTokenCache: AppToken | null = null;
 
 function hasAppConfig(): boolean {
@@ -80,8 +118,11 @@ async function getAppInstallationToken(forceRefresh = false): Promise<string | n
 	const now = Math.floor(Date.now() / 1000);
 	const payload = { iat: now - 60, exp: now + 600, iss: appId };
 
+	// Support both literal-\n (escaped) and actual newlines so the PEM can be
+	// pasted as-is from the downloaded .pem file without any manual escaping.
 	const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
 
+	const isPkcs1 = privateKey.includes('-----BEGIN RSA PRIVATE KEY-----');
 	const pemBody = privateKey
 		.replace(/-----BEGIN RSA PRIVATE KEY-----/, '')
 		.replace(/-----END RSA PRIVATE KEY-----/, '')
@@ -89,18 +130,30 @@ async function getAppInstallationToken(forceRefresh = false): Promise<string | n
 		.replace(/-----END PRIVATE KEY-----/, '')
 		.replace(/\s/g, '');
 	const binaryKey = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
+	// GitHub App keys are PKCS#1; Web Crypto requires PKCS#8.
+	const keyBytes = isPkcs1 ? pkcs1ToPkcs8(binaryKey) : binaryKey;
+	// .slice() on ArrayBufferLike returns ArrayBufferLike, but Web Crypto requires a plain
+	// ArrayBuffer. The cast is safe because both pkcs1ToPkcs8 and Uint8Array.from() always
+	// allocate a regular ArrayBuffer (never a SharedArrayBuffer).
+	const keyBuffer = keyBytes.buffer.slice(
+		keyBytes.byteOffset,
+		keyBytes.byteOffset + keyBytes.byteLength
+	) as ArrayBuffer;
 
 	let cryptoKey: CryptoKey;
 	try {
 		cryptoKey = await crypto.subtle.importKey(
 			'pkcs8',
-			binaryKey,
+			keyBuffer,
 			{ name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
 			false,
 			['sign']
 		);
-	} catch {
-		console.error('Failed to import GitHub App private key');
+	} catch (err) {
+		console.error(
+			`Failed to import GitHub App private key (detected format: ${isPkcs1 ? 'PKCS#1' : 'PKCS#8'}):`,
+			err
+		);
 		return null;
 	}
 

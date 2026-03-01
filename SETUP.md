@@ -32,7 +32,7 @@ The `.env.example` file documents all supported variables but does not contain r
 | Variable | Description |
 |----------|-------------|
 | `GITHUB_APP_ID` | Your GitHub App's numeric ID |
-| `GITHUB_APP_PRIVATE_KEY` | Contents of the `.pem` private key (replace newlines with `\n`) |
+| `GITHUB_APP_PRIVATE_KEY` | Contents of the `.pem` private key (paste as-is or replace newlines with `\n`) |
 | `GITHUB_APP_INSTALLATION_ID` | The installation ID for your repository |
 
 ### OAuth (for user sign-in / posting)
@@ -104,7 +104,7 @@ You need three values:
 | Variable | Where to find it |
 |----------|-----------------|
 | `GITHUB_APP_ID` | Your App's settings page → "App ID" at the top |
-| `GITHUB_APP_PRIVATE_KEY` | Contents of the `.pem` file (replace newlines with `\n` for env vars) |
+| `GITHUB_APP_PRIVATE_KEY` | Contents of the `.pem` file (paste as-is, or replace newlines with `\n`) |
 | `GITHUB_APP_INSTALLATION_ID` | Go to Settings → Integrations → your app → the number in the URL (e.g. `https://github.com/settings/installations/12345678` → `12345678`) |
 
 ### Step 5: Set Environment Variables
@@ -117,7 +117,7 @@ GITHUB_APP_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PR
 GITHUB_APP_INSTALLATION_ID=12345678
 ```
 
-> **Note:** Whether the private key value needs surrounding quotes depends on your hosting platform. Most platforms (Cloudflare, Vercel) accept the value as-is in their dashboard UI. If setting via shell, wrap in double quotes.
+> **Note:** The private key can be pasted as-is (with real newlines) or with newlines escaped as `\n` — both formats are accepted. Most platforms (Cloudflare, Vercel) support multi-line secrets in their dashboard UI. If setting via shell, wrap the value in double quotes.
 
 When these are set, Gitorum will automatically generate short-lived installation tokens for read requests and renew them when they expire or hit rate limits.
 
@@ -240,7 +240,7 @@ The following variables are supported. **Set secret values on your hosting platf
 | `GITHUB_REPO_OWNER` | Yes | No | Repository owner |
 | `GITHUB_REPO_NAME` | Yes | No | Repository name |
 | `GITHUB_APP_ID` | Yes | No | GitHub App numeric ID |
-| `GITHUB_APP_PRIVATE_KEY` | Yes | **Yes** | GitHub App private key (PEM format, `\n`-escaped) |
+| `GITHUB_APP_PRIVATE_KEY` | Yes | **Yes** | GitHub App private key (PEM format; paste as-is or `\n`-escaped) |
 | `GITHUB_APP_INSTALLATION_ID` | Yes | No | GitHub App installation ID |
 | `GITHUB_OAUTH_CLIENT_ID` | For auth | No | OAuth App client ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | For auth | **Yes** | OAuth App client secret |

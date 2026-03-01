@@ -17,6 +17,6 @@ export const load: PageServerLoad = async ({ params, locals, setHeaders }) => {
 		if (err instanceof RateLimitError) {
 			return { thread: null, rateLimited: true };
 		}
-		throw err;
+		error(503, err instanceof Error ? err.message : 'Failed to load thread');
 	}
 };

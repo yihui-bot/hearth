@@ -9,7 +9,7 @@
 	<title>{data.forumTitle}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+<div class="min-h-screen bg-stone-50 text-gray-900 dark:bg-[#1a1814] dark:text-gray-100">
 	<!-- Header -->
 	<header class="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
 		<div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">

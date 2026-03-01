@@ -1,5 +1,5 @@
 <script lang="ts">
-import { timeAgo } from '$lib/utils';
+import { formatDate } from '$lib/utils';
 
 let { data } = $props();
 
@@ -58,6 +58,14 @@ Latest
 class="rounded px-3 py-1 text-sm {data.sort === 'CREATED_AT' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}">
 Newest
 </a>
+<a href="/c/{data.category.slug}?sort=top"
+class="rounded px-3 py-1 text-sm {data.sort === 'top' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}">
+Top
+</a>
+<a href="/c/{data.category.slug}?sort=trending"
+class="rounded px-3 py-1 text-sm {data.sort === 'trending' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}">
+Trending
+</a>
 </div>
 </div>
 
@@ -87,7 +95,7 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {/if}
 </div>
 <p class="text-xs text-gray-500 dark:text-gray-400">
-{thread.author?.login || 'ghost'} · {timeAgo(thread.createdAt)}
+{thread.author?.login || 'ghost'}{#if thread.isAnswered} · <span class="font-medium text-green-600 dark:text-green-400">Answered</span>{/if} · {formatDate(thread.createdAt)}
 </p>
 </div>
 <div class="flex shrink-0 items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
@@ -128,7 +136,7 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {/if}
 </div>
 <p class="text-xs text-gray-500 dark:text-gray-400">
-{thread.author?.login || 'ghost'} · {timeAgo(thread.createdAt)}
+{thread.author?.login || 'ghost'}{#if thread.isAnswered} · <span class="font-medium text-green-600 dark:text-green-400">Answered</span>{/if} · {formatDate(thread.createdAt)}
 </p>
 </div>
 <div class="flex shrink-0 items-center gap-4 text-xs text-gray-500 dark:text-gray-400">

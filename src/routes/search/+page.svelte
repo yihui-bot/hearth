@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { timeAgo } from '$lib/utils';
+	import { formatDate } from '$lib/utils';
 
 	let { data } = $props();
 </script>
@@ -54,7 +54,7 @@
 								{#if thread.category}
 									 in {thread.category.name}
 								{/if}
-								 · {timeAgo(thread.createdAt)}
+								 · {formatDate(thread.createdAt)}
 							</p>
 						</div>
 

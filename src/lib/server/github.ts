@@ -345,7 +345,7 @@ export async function fetchThreadsByCategory(
 						totalCount
 						pageInfo { hasNextPage endCursor }
 						nodes {
-							id number title createdAt
+							id number title createdAt isAnswered
 							author { login avatarUrl url }
 							labels(first: 10) { nodes { name color } }
 							comments { totalCount }
@@ -422,7 +422,7 @@ export async function fetchThread(number: number, commentPage: number = 1, userT
 				`query($owner: String!, $repo: String!, $number: Int!) {
 					repository(owner: $owner, name: $repo) {
 						discussion(number: $number) {
-							id number title body bodyHTML createdAt
+							id number title body bodyHTML createdAt isAnswered
 							author { login avatarUrl url }
 							category { name slug }
 							labels(first: 10) { nodes { name color } }
@@ -590,7 +590,7 @@ export async function fetchPinnedDiscussions(userToken?: string | null) {
 					pinnedDiscussions(first: 8) {
 						nodes {
 							discussion {
-								id number title createdAt
+								id number title createdAt isAnswered
 								author { login avatarUrl url }
 								category { id name slug emoji emojiHTML }
 								labels(first: 10) { nodes { name color } }
@@ -614,8 +614,8 @@ export async function fetchPinnedDiscussions(userToken?: string | null) {
 	return pinned;
 }
 
-export async function fetchLatestDiscussions(first: number = 30, userToken?: string | null) {
-	const cacheKey = `latest:${first}`;
+export async function fetchLatestDiscussions(first: number = 30, orderBy: string = 'UPDATED_AT', userToken?: string | null) {
+	const cacheKey = `latest:${first}:${orderBy}`;
 	const cached = getCached<any[]>(cacheKey);
 	if (cached) return cached;
 
@@ -627,11 +627,11 @@ export async function fetchLatestDiscussions(first: number = 30, userToken?: str
 
 	const result: any = await executeGraphQLRead(token, (gql) =>
 		gql(
-			`query($owner: String!, $repo: String!, $first: Int!) {
+			`query($owner: String!, $repo: String!, $first: Int!, $orderBy: DiscussionOrderField!) {
 				repository(owner: $owner, name: $repo) {
-					discussions(first: $first, orderBy: { field: UPDATED_AT, direction: DESC }) {
+					discussions(first: $first, orderBy: { field: $orderBy, direction: DESC }) {
 						nodes {
-							id number title createdAt
+							id number title createdAt isAnswered
 							author { login avatarUrl url }
 							category { id name slug emoji emojiHTML }
 							labels(first: 10) { nodes { name color } }
@@ -641,13 +641,70 @@ export async function fetchLatestDiscussions(first: number = 30, userToken?: str
 					}
 				}
 			}`,
-			{ owner, repo, first }
+			{ owner, repo, first, orderBy }
 		)
 	);
 	const discussions = result.repository.discussions.nodes.map((d: any) => {
 		parseCategoryEmoji(d.category);
 		return d;
 	});
+
+	setCache(cacheKey, discussions, 60);
+	return discussions;
+}
+
+/**
+ * Fetch top or trending discussions globally (or filtered by category slug) using
+ * GitHub's search API which supports reaction-count sorting.
+ * sort: 'top' = all-time most reactions, 'trending' = most reactions in past 30 days.
+ */
+export async function fetchTopDiscussions(
+	sort: 'top' | 'trending',
+	categorySlug?: string | null,
+	first: number = 30,
+	userToken?: string | null
+) {
+	const cacheKey = `top:${sort}:${categorySlug || ''}:${first}`;
+	const cached = getCached<any[]>(cacheKey);
+	if (cached) return cached;
+
+	const token = await getReadToken(userToken);
+	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
+
+	const owner = getRepoOwner();
+	const repo = getRepoName();
+
+	let searchQuery = `repo:${owner}/${repo} type:discussion sort:reactions-desc`;
+	if (categorySlug) searchQuery += ` category:${categorySlug}`;
+	if (sort === 'trending') {
+		const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+		const monthAgo = new Date(Date.now() - THIRTY_DAYS_MS).toISOString().slice(0, 10);
+		searchQuery += ` created:>${monthAgo}`;
+	}
+
+	const result: any = await executeGraphQLRead(token, (gql) =>
+		gql(
+			`query($searchQuery: String!, $first: Int!) {
+				search(query: $searchQuery, type: DISCUSSION, first: $first) {
+					nodes {
+						... on Discussion {
+							id number title createdAt isAnswered
+							author { login avatarUrl url }
+							category { id name slug emoji emojiHTML }
+							labels(first: 10) { nodes { name color } }
+							comments { totalCount }
+							reactions { totalCount }
+						}
+					}
+				}
+			}`,
+			{ searchQuery, first }
+		)
+	);
+
+	const discussions = (result.search.nodes as any[])
+		.filter((n: any) => n?.number)
+		.map((d: any) => { parseCategoryEmoji(d.category); return d; });
 
 	setCache(cacheKey, discussions, 60);
 	return discussions;

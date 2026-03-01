@@ -1,7 +1,14 @@
 <script lang="ts">
-import { timeAgo } from '$lib/utils';
+import { formatDate } from '$lib/utils';
 
 let { data } = $props();
+
+const SORTS = [
+	{ key: 'latest', label: 'Latest' },
+	{ key: 'newest', label: 'Newest' },
+	{ key: 'top',    label: 'Top' },
+	{ key: 'trending', label: 'Trending' },
+] as const;
 </script>
 
 <svelte:head>
@@ -68,7 +75,7 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {/if}
 </div>
 <p class="truncate text-xs text-gray-500 dark:text-gray-400">
-{thread.category?.emoji || '💬'} {thread.category?.name} · {thread.author?.login || 'ghost'} · {timeAgo(thread.createdAt)}
+{thread.category?.emoji || '💬'} {thread.category?.name} · {thread.author?.login || 'ghost'}{#if thread.isAnswered} · <span class="font-medium text-green-600 dark:text-green-400">Answered</span>{/if} · {formatDate(thread.createdAt)}
 </p>
 </div>
 <div class="flex shrink-0 items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
@@ -85,10 +92,21 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 
 <!-- Latest threads -->
 <section>
-<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Latest</h2>
-{#if data.latest && data.latest.length > 0}
+<div class="mb-3 flex items-center justify-between">
+<h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+{SORTS.find(s => s.key === data.sort)?.label ?? 'Latest'}
+</h2>
+<div class="flex gap-1">
+{#each SORTS as s}
+<a href="/?sort={s.key}"
+class="rounded px-3 py-1 text-sm {data.sort === s.key || (!data.sort && s.key === 'latest') ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}"
+>{s.label}</a>
+{/each}
+</div>
+</div>
+{#if data.threads && data.threads.length > 0}
 <div class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
-{#each data.latest as thread}
+{#each data.threads as thread}
 <a href="/t/{thread.number}" class="flex items-center gap-4 px-4 py-3 transition hover:bg-gray-50 dark:hover:bg-gray-800/50">
 {#if thread.author}
 <img src={thread.author.avatarUrl} alt={thread.author.login} class="h-8 w-8 shrink-0 rounded-full" />
@@ -107,7 +125,7 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {/if}
 </div>
 <p class="truncate text-xs text-gray-500 dark:text-gray-400">
-{thread.category?.emoji || '💬'} {thread.category?.name} · {thread.author?.login || 'ghost'} · {timeAgo(thread.createdAt)}
+{thread.category?.emoji || '💬'} {thread.category?.name} · {thread.author?.login || 'ghost'}{#if thread.isAnswered} · <span class="font-medium text-green-600 dark:text-green-400">Answered</span>{/if} · {formatDate(thread.createdAt)}
 </p>
 </div>
 <div class="flex shrink-0 items-center gap-3 text-xs text-gray-500 dark:text-gray-400">

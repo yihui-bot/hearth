@@ -1,5 +1,5 @@
 <script lang="ts">
-import { timeAgo, reactionEmoji } from '$lib/utils';
+import { formatDate, reactionEmoji } from '$lib/utils';
 import { renderMarkdown } from '$lib/markdown';
 
 let { data } = $props();
@@ -71,6 +71,9 @@ replying = false;
 <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
 <div class="flex flex-wrap items-start gap-2">
 <h1 class="flex-1 text-xl font-bold text-gray-900 dark:text-gray-100">{data.thread.title}</h1>
+{#if data.thread.isAnswered}
+<span class="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">✓ Answered</span>
+{/if}
 </div>
 {#if data.thread.labels?.nodes?.length > 0}
 <div class="mt-2 flex flex-wrap gap-1.5">
@@ -91,7 +94,7 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 <div class="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-700"></div>
 <span class="text-sm text-gray-500">ghost</span>
 {/if}
-<span class="text-xs text-gray-500 dark:text-gray-400">{timeAgo(data.thread.createdAt)}</span>
+<span class="text-xs text-gray-500 dark:text-gray-400">{formatDate(data.thread.createdAt)}</span>
 </div>
 </div>
 
@@ -104,12 +107,12 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {#each activeGroups(data.thread.reactionGroups) as group}
 {@const users = group.reactors?.nodes?.filter((u: any) => u?.login) ?? []}
 {@const extra = (group.reactors?.totalCount ?? 0) - users.length}
-<div class="group relative inline-flex">
+<div class="group relative inline-flex after:absolute after:bottom-full after:left-0 after:right-0 after:h-1 after:content-['']">
 <span class="cursor-default rounded-full bg-gray-100 px-2.5 py-0.5 text-sm dark:bg-gray-800">
 {reactionEmoji(group.content)} <span class="font-medium">{group.reactors.totalCount}</span>
 </span>
 {#if users.length > 0}
-<div class="pointer-events-auto absolute bottom-full left-1/2 z-20 mb-1 hidden min-w-max max-w-[220px] -translate-x-1/2 rounded bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-lg group-hover:block dark:bg-gray-700">
+<div class="pointer-events-auto absolute bottom-full left-1/2 z-20 hidden min-w-max max-w-[220px] -translate-x-1/2 rounded bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-lg group-hover:block dark:bg-gray-700">
 {#each users as u, i}<a href="https://github.com/{u.login}" target="_blank" rel="noopener" class="hover:underline">{u.login}</a>{#if i < users.length - 1 || extra > 0}, {/if}{/each}{#if extra > 0}and {extra} more{/if}
 </div>
 {/if}
@@ -143,7 +146,7 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 <div class="h-7 w-7 rounded-full bg-gray-300 dark:bg-gray-700"></div>
 <span class="text-sm text-gray-500">ghost</span>
 {/if}
-<span class="text-xs text-gray-500 dark:text-gray-400">{timeAgo(comment.createdAt)}</span>
+<span class="text-xs text-gray-500 dark:text-gray-400">{formatDate(comment.createdAt)}</span>
 </div>
 
 <div class="prose dark:prose-invert max-w-none px-5 py-3">
@@ -155,12 +158,12 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {#each activeGroups(comment.reactionGroups) as group}
 {@const users = group.reactors?.nodes?.filter((u: any) => u?.login) ?? []}
 {@const extra = (group.reactors?.totalCount ?? 0) - users.length}
-<div class="group relative inline-flex">
+<div class="group relative inline-flex after:absolute after:bottom-full after:left-0 after:right-0 after:h-1 after:content-['']">
 <span class="cursor-default rounded-full bg-gray-100 px-2.5 py-0.5 text-sm dark:bg-gray-800">
 {reactionEmoji(group.content)} <span class="font-medium">{group.reactors.totalCount}</span>
 </span>
 {#if users.length > 0}
-<div class="pointer-events-auto absolute bottom-full left-1/2 z-20 mb-1 hidden min-w-max max-w-[220px] -translate-x-1/2 rounded bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-lg group-hover:block dark:bg-gray-700">
+<div class="pointer-events-auto absolute bottom-full left-1/2 z-20 hidden min-w-max max-w-[220px] -translate-x-1/2 rounded bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-lg group-hover:block dark:bg-gray-700">
 {#each users as u, i}<a href="https://github.com/{u.login}" target="_blank" rel="noopener" class="hover:underline">{u.login}</a>{#if i < users.length - 1 || extra > 0}, {/if}{/each}{#if extra > 0}and {extra} more{/if}
 </div>
 {/if}
@@ -180,7 +183,7 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {:else}
 <span class="text-sm text-gray-500">ghost</span>
 {/if}
-<span class="text-xs text-gray-500 dark:text-gray-400">{timeAgo(reply.createdAt)}</span>
+<span class="text-xs text-gray-500 dark:text-gray-400">{formatDate(reply.createdAt)}</span>
 </div>
 <div class="prose dark:prose-invert mt-1 max-w-none text-sm">
 {@html reply.bodyHTML}

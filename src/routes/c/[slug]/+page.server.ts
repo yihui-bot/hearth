@@ -1,4 +1,4 @@
-import { fetchCategoryBySlug, fetchThreadsByPage, fetchPinnedDiscussions, RateLimitError } from '$lib/server/github';
+import { fetchCategoryBySlug, fetchThreadsByPage, fetchPinnedDiscussions, fetchTopDiscussions, RateLimitError } from '$lib/server/github';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -14,15 +14,30 @@ export const load: PageServerLoad = async ({ params, url, locals, setHeaders }) 
 
 		const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
 		const sort = url.searchParams.get('sort') || 'UPDATED_AT';
-		const orderBy = sort === 'CREATED_AT' ? 'CREATED_AT' : 'UPDATED_AT';
-
-		const discussions = await fetchThreadsByPage(category.id, page, PER_PAGE, orderBy, locals.userToken);
 
 		setHeaders({ 'Cache-Control': 'public, max-age=60, s-maxage=60, stale-while-revalidate=120' });
 
+		const pinnedForCategory = (allPinned as any[]).filter((d: any) => d.category?.id === category.id);
+
+		if (sort === 'top' || sort === 'trending') {
+			const threads = await fetchTopDiscussions(sort, category.slug, 50, locals.userToken);
+			return {
+				category,
+				threads,
+				pinned: pinnedForCategory,
+				page: 1,
+				totalPages: 1,
+				totalCount: threads.length,
+				sort,
+				rateLimited: false
+			};
+		}
+
+		const orderBy = sort === 'CREATED_AT' ? 'CREATED_AT' : 'UPDATED_AT';
+		const discussions = await fetchThreadsByPage(category.id, page, PER_PAGE, orderBy, locals.userToken);
+
 		const totalCount: number = discussions?.totalCount ?? 0;
 		const totalPages = Math.max(1, Math.ceil(totalCount / PER_PAGE));
-		const pinnedForCategory = (allPinned as any[]).filter((d: any) => d.category?.id === category.id);
 
 		return {
 			category,

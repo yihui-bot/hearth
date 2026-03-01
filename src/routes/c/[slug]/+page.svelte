@@ -1,5 +1,5 @@
 <script lang="ts">
-import { formatDate } from '$lib/utils';
+import { formatDate, truncateText } from '$lib/utils';
 
 let { data } = $props();
 
@@ -77,15 +77,15 @@ Trending
 </h2>
 <div class="divide-y divide-gray-200 rounded-lg border border-orange-200 bg-orange-50/50 dark:divide-gray-800 dark:border-orange-900/40 dark:bg-orange-950/10">
 {#each data.pinned as thread}
-<a href="/t/{thread.number}" class="flex items-center gap-4 px-4 py-3 transition hover:bg-orange-50 dark:hover:bg-orange-950/20">
+<a href="/t/{thread.number}" class="flex items-start gap-4 px-4 py-3 transition hover:bg-orange-50 dark:hover:bg-orange-950/20">
 {#if thread.author}
-<img src={thread.author.avatarUrl} alt={thread.author.login} class="h-8 w-8 shrink-0 rounded-full" />
+<img src={thread.author.avatarUrl} alt={thread.author.login} class="mt-0.5 h-8 w-8 shrink-0 rounded-full" />
 {:else}
-<div class="h-8 w-8 shrink-0 rounded-full bg-gray-300 dark:bg-gray-700"></div>
+<div class="mt-0.5 h-8 w-8 shrink-0 rounded-full bg-gray-300 dark:bg-gray-700"></div>
 {/if}
 <div class="min-w-0 flex-1">
 <div class="flex flex-wrap items-center gap-2">
-<span class="truncate font-medium text-gray-900 dark:text-gray-100">{thread.title}</span>
+<span class="font-medium text-gray-900 dark:text-gray-100">{thread.title}</span>
 {#if thread.labels?.nodes?.length > 0}
 {#each thread.labels.nodes as label}
 <span class="rounded-full border px-1.5 py-0 text-xs font-medium"
@@ -94,7 +94,10 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {/each}
 {/if}
 </div>
-<p class="text-xs text-gray-500 dark:text-gray-400">
+{#if thread.bodyText}
+<p class="mt-0.5 line-clamp-2 text-xs text-gray-600 dark:text-gray-400">{truncateText(thread.bodyText)}</p>
+{/if}
+<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
 {thread.author?.login || 'ghost'}{#if thread.isAnswered} · <span class="font-medium text-green-600 dark:text-green-400">Answered</span>{/if} · {formatDate(thread.createdAt)}
 </p>
 </div>

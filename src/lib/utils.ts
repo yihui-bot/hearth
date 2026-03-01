@@ -6,11 +6,13 @@ export function slugify(text: string): string {
 }
 
 export function formatDate(dateString: string): string {
-	return new Date(dateString).toLocaleDateString(undefined, {
-		year: 'numeric',
-		month: 'short',
-		day: 'numeric'
-	});
+	const d = new Date(dateString);
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+export function truncateText(text: string, maxLength: number = 200): string {
+	return text.length > maxLength ? text.slice(0, maxLength) + '…' : text;
 }
 
 export function reactionEmoji(content: string): string {

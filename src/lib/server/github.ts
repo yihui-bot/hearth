@@ -590,7 +590,7 @@ export async function fetchPinnedDiscussions(userToken?: string | null) {
 					pinnedDiscussions(first: 8) {
 						nodes {
 							discussion {
-								id number title createdAt isAnswered
+								id number title bodyText createdAt isAnswered
 								author { login avatarUrl url }
 								category { id name slug emoji emojiHTML }
 								labels(first: 10) { nodes { name color } }
@@ -674,12 +674,12 @@ export async function fetchTopDiscussions(
 	const owner = getRepoOwner();
 	const repo = getRepoName();
 
-	let searchQuery = `repo:${owner}/${repo} type:discussion sort:reactions-desc`;
+	let searchQuery = `repo:${owner}/${repo} type:discussion sort:top`;
 	if (categorySlug) searchQuery += ` category:${categorySlug}`;
 	if (sort === 'trending') {
 		const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 		const monthAgo = new Date(Date.now() - THIRTY_DAYS_MS).toISOString().slice(0, 10);
-		searchQuery += ` created:>${monthAgo}`;
+		searchQuery += ` created:>=${monthAgo}`;
 	}
 
 	const result: any = await executeGraphQLRead(token, (gql) =>

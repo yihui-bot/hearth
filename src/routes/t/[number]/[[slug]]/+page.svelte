@@ -17,6 +17,42 @@ function commentPageUrl(cp: number) {
 return `/t/${data.thread.number}?cp=${cp}`;
 }
 
+/**
+ * Svelte action: clamp the reaction tooltip so it never overflows the viewport.
+ * The tooltip is made visible by CSS (group-hover:block) before this handler runs,
+ * so getBoundingClientRect() returns real dimensions and we can nudge the transform.
+ */
+function clampTooltip(node: HTMLElement) {
+	const tooltip = node.querySelector<HTMLElement>('[data-tooltip]');
+	if (!tooltip) return;
+
+	function adjust() {
+		// Reset any previous nudge so the measurement starts from center.
+		tooltip!.style.transform = 'translateX(-50%)';
+		const r = tooltip!.getBoundingClientRect();
+		const vw = window.innerWidth;
+		const margin = 8;
+		if (r.right > vw - margin) {
+			tooltip!.style.transform = `translateX(calc(-50% - ${r.right - vw + margin}px))`;
+		} else if (r.left < margin) {
+			tooltip!.style.transform = `translateX(calc(-50% + ${margin - r.left}px))`;
+		}
+	}
+
+	function reset() {
+		tooltip!.style.transform = '';
+	}
+
+	node.addEventListener('mouseenter', adjust);
+	node.addEventListener('mouseleave', reset);
+	return {
+		destroy() {
+			node.removeEventListener('mouseenter', adjust);
+			node.removeEventListener('mouseleave', reset);
+		}
+	};
+}
+
 async function submitReply() {
 if (!replyBody.trim()) return;
 replying = true;
@@ -107,12 +143,12 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {#each activeGroups(data.thread.reactionGroups) as group}
 {@const users = group.reactors?.nodes?.filter((u: any) => u?.login) ?? []}
 {@const extra = (group.reactors?.totalCount ?? 0) - users.length}
-<div class="group relative inline-flex after:absolute after:bottom-full after:left-0 after:right-0 after:h-1 after:content-['']">
+<div use:clampTooltip class="group relative inline-flex after:absolute after:bottom-full after:left-0 after:right-0 after:h-1 after:content-['']">
 <span class="cursor-default rounded-full bg-gray-100 px-2.5 py-0.5 text-sm dark:bg-gray-800">
 {reactionEmoji(group.content)} <span class="font-medium">{group.reactors.totalCount}</span>
 </span>
 {#if users.length > 0}
-<div class="pointer-events-auto absolute bottom-full left-1/2 z-20 hidden min-w-max max-w-[220px] -translate-x-1/2 rounded bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-lg group-hover:block dark:bg-gray-700">
+<div data-tooltip class="pointer-events-auto absolute bottom-full left-1/2 z-20 hidden min-w-max max-w-[220px] -translate-x-1/2 rounded bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-lg group-hover:block dark:bg-gray-700">
 {#each users as u, i}<a href="https://github.com/{u.login}" target="_blank" rel="noopener" class="hover:underline">{u.login}</a>{#if i < users.length - 1 || extra > 0}, {/if}{/each}{#if extra > 0}and {extra} more{/if}
 </div>
 {/if}
@@ -158,12 +194,12 @@ style="background-color:#{label.color}22;color:#{label.color};border-color:#{lab
 {#each activeGroups(comment.reactionGroups) as group}
 {@const users = group.reactors?.nodes?.filter((u: any) => u?.login) ?? []}
 {@const extra = (group.reactors?.totalCount ?? 0) - users.length}
-<div class="group relative inline-flex after:absolute after:bottom-full after:left-0 after:right-0 after:h-1 after:content-['']">
+<div use:clampTooltip class="group relative inline-flex after:absolute after:bottom-full after:left-0 after:right-0 after:h-1 after:content-['']">
 <span class="cursor-default rounded-full bg-gray-100 px-2.5 py-0.5 text-sm dark:bg-gray-800">
 {reactionEmoji(group.content)} <span class="font-medium">{group.reactors.totalCount}</span>
 </span>
 {#if users.length > 0}
-<div class="pointer-events-auto absolute bottom-full left-1/2 z-20 hidden min-w-max max-w-[220px] -translate-x-1/2 rounded bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-lg group-hover:block dark:bg-gray-700">
+<div data-tooltip class="pointer-events-auto absolute bottom-full left-1/2 z-20 hidden min-w-max max-w-[220px] -translate-x-1/2 rounded bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-white shadow-lg group-hover:block dark:bg-gray-700">
 {#each users as u, i}<a href="https://github.com/{u.login}" target="_blank" rel="noopener" class="hover:underline">{u.login}</a>{#if i < users.length - 1 || extra > 0}, {/if}{/each}{#if extra > 0}and {extra} more{/if}
 </div>
 {/if}

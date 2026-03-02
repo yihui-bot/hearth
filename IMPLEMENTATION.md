@@ -9,7 +9,7 @@
   1. **GitHub App installation tokens** (required) — auto-generated, short-lived, 5,000 req/hr with automatic renewal on rate limit
   2. **User OAuth token** (for writes) — from httpOnly cookie after sign-in
 - **Secrets management**: All secrets (App private key, OAuth client secret) are set as server-side environment variables on the hosting platform — never committed to version control
-- **Caching**: Two-layer — in-memory server cache + HTTP `Cache-Control` headers for CDN/edge
+- **Caching**: Server-side in-memory TTL cache; HTTP pages use `Cache-Control: no-store` to prevent CDN/browser caching of auth-sensitive UI (every page renders a different header for logged-in vs. anonymous users)
 - **Hosting**: Cloudflare Pages or Vercel — free tier is sufficient
 - **No database. No user table. No file storage.**
 
@@ -165,7 +165,7 @@ mutation($discussionId: ID!, $body: String!) {
 
 1. On `/auth/login`: redirect to `https://github.com/login/oauth/authorize?client_id=CLIENT_ID&scope=public_repo&state=RANDOM_STATE`
 2. On `/auth/callback`: POST to `https://github.com/login/oauth/access_token` with code + client secret, receive `access_token`
-3. Store `access_token` in a signed httpOnly cookie
+3. Store `access_token` in an httpOnly cookie (`gh_token`); cookie is `secure` + `sameSite=lax`, valid for 30 days
 4. On every request: read cookie, fetch `viewer { login avatarUrl }` to validate and hydrate user context
 5. For mutations: use the user's token from the cookie as the `Authorization: bearer TOKEN` header in GraphQL calls
 
@@ -176,15 +176,14 @@ mutation($discussionId: ID!, $body: String!) {
 - All **read requests** go through server-side routes using the GitHub App installation token — never exposed to the client
 - GitHub App tokens are short-lived (1 hour) and automatically renewed; on rate limit, Gitorum invalidates the cached token and requests a fresh one
 - All **write requests** use the authenticated user's own OAuth token — rate limits are per-user
-- In-memory cache (TTL-based) deduplicates requests within a single process
-- HTTP `Cache-Control` headers with `s-maxage` enable CDN/edge caching (Cloudflare, Vercel)
+- In-memory cache (TTL-based) deduplicates GitHub API requests within a single server process, compensating for the absence of CDN caching
 
 ---
 
 ## Markdown Rendering
 
 - GitHub returns `bodyHTML` pre-rendered — used directly for display
-- For preview (create/reply forms): `marked` + `DOMPurify` for client-side rendering
+- For preview (create/reply forms): `marked` for client-side rendering (preview is only shown to the author; all stored/displayed content comes from GitHub's pre-sanitized `bodyHTML`)
 - No rich text editor — plain `<textarea>` with a preview toggle
 
 ---

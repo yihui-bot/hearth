@@ -150,11 +150,9 @@ This allows users to sign in and create threads/replies.
 
 ## 5. Caching Strategy
 
-Gitorum uses two layers of caching to minimize GitHub API usage:
+### Server-Side In-Memory Cache (built-in)
 
-### Layer 1: Server-Side In-Memory Cache (built-in)
-
-All read operations are cached in memory on the SvelteKit server:
+All GitHub API read operations are cached in memory on the SvelteKit server:
 
 | Data | TTL |
 |------|-----|
@@ -164,47 +162,17 @@ All read operations are cached in memory on the SvelteKit server:
 | Search results | 1 minute |
 | Repo ID | 1 hour |
 
-This reduces redundant API calls within a single server process.
+This deduplicates GitHub API calls within a single server process, so repeated page loads within the TTL window hit the cache rather than the API.
 
-### Layer 2: HTTP Cache Headers (for CDN/Cloudflare)
+### Why CDN/browser caching is disabled
 
-All read pages return `Cache-Control` headers with `s-maxage` for CDN/edge caching.
+Every page in Gitorum includes an auth-aware header (showing either "Sign in with GitHub" or the signed-in user's avatar). Because the same URL serves different HTML depending on whether the visitor is logged in, responses are sent with `Cache-Control: no-store` — meaning no CDN or browser will cache the HTML.
 
-### Setting Up Cloudflare Caching
+Without this, CDNs such as Cloudflare would serve the same cached anonymous page to logged-in users, because CDNs do not vary their cache key by cookie value by default.
 
-If you deploy to **Cloudflare Pages** or put Cloudflare in front of your deployment:
+Page **performance** is not significantly impacted: the in-memory cache absorbs repeated GitHub API calls, so the server can respond quickly without hitting the API on every request. The only cost is that each browser request reaches the SvelteKit server rather than a CDN edge node.
 
-1. **Go to**: Cloudflare Dashboard → your domain → Caching → Configuration
-
-2. **Browser Cache TTL**: Set to "Respect existing headers" (so our `Cache-Control` headers are honored)
-
-3. **Create a Cache Rule** (Rules → Cache Rules → Create rule):
-   - **Rule name**: `Forum page cache`
-   - **When**: Custom filter expression:
-     ```
-     (http.request.uri.path eq "/" or
-      http.request.uri.path matches "^/c/.*" or
-      http.request.uri.path matches "^/t/.*" or
-      http.request.uri.path matches "^/search.*")
-     ```
-   - **Then**: Eligible for cache
-     - **Edge TTL**: Override — `60 seconds`
-     - **Browser TTL**: Override — `60 seconds`
-
-4. **Exclude auth routes** — The `/auth/*` and `/api/*` routes should **not** be cached. If needed, create an exclusion rule:
-   - **When**: `http.request.uri.path matches "^/(auth|api)/.*"`
-   - **Then**: Bypass cache
-
-5. (Optional) **Cloudflare Workers** — For more control, you can use a Cloudflare Worker to add caching logic. Cloudflare Pages Functions already support `Cache-Control` headers natively.
-
-### Cloudflare Page Rules (alternative)
-
-If you prefer Page Rules:
-- `yourdomain.com/` → Cache Level: Cache Everything, Edge Cache TTL: 2 minutes
-- `yourdomain.com/c/*` → Cache Level: Cache Everything, Edge Cache TTL: 1 minute
-- `yourdomain.com/t/*` → Cache Level: Cache Everything, Edge Cache TTL: 1 minute
-- `yourdomain.com/auth/*` → Cache Level: Bypass
-- `yourdomain.com/api/*` → Cache Level: Bypass
+**Is per-group caching possible?** Technically, a CDN *Vary* on a cookie is possible but most CDNs (including Cloudflare) do not support it out of the box. Maintaining two separate cache namespaces (logged-in / logged-out) would require a custom CDN Worker and additional complexity. The in-memory cache is sufficient for a forum workload.
 
 ---
 

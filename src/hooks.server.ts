@@ -23,10 +23,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 					event.locals.user = json.data.viewer;
 					event.locals.userToken = token;
 				}
+			} else if (res.status === 401) {
+				// Token explicitly rejected — clear it so the user can re-authenticate
+				event.cookies.delete('gh_token', { path: '/' });
 			}
+			// For other non-OK statuses (5xx etc.) keep the token; treat as
+			// anonymous for this request only so a transient GitHub outage does
+			// not permanently sign the user out.
 		} catch {
-			// Token invalid or expired, clear it
-			event.cookies.delete('gh_token', { path: '/' });
+			// Network error — keep the token and treat as anonymous for this
+			// request only; do NOT delete so a transient error doesn't sign out
+			// the user permanently.
 		}
 	}
 

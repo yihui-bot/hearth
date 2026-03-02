@@ -345,7 +345,7 @@ export async function fetchThreadsByCategory(
 						totalCount
 						pageInfo { hasNextPage endCursor }
 						nodes {
-							id number title createdAt isAnswered state
+							id number title createdAt isAnswered
 							author { login avatarUrl url }
 							labels(first: 10) { nodes { name color } }
 							comments { totalCount }
@@ -358,7 +358,6 @@ export async function fetchThreadsByCategory(
 		)
 	);
 	const discussions = result.repository.discussions;
-	discussions.nodes = discussions.nodes.filter((d: any) => d.state === 'OPEN');
 
 	setCache(cacheKey, discussions, 60);
 	return discussions;
@@ -391,7 +390,7 @@ export async function fetchAllDiscussions(
 						totalCount
 						pageInfo { hasNextPage endCursor }
 						nodes {
-							id number title createdAt isAnswered state
+							id number title createdAt isAnswered
 							author { login avatarUrl url }
 							category { id name slug emoji emojiHTML }
 							labels(first: 10) { nodes { name color } }
@@ -405,7 +404,6 @@ export async function fetchAllDiscussions(
 		)
 	);
 	const discussions = result.repository.discussions;
-	discussions.nodes = discussions.nodes.filter((d: any) => d.state === 'OPEN');
 	for (const d of discussions.nodes) parseCategoryEmoji(d.category);
 
 	setCache(cacheKey, discussions, 60);
@@ -478,7 +476,7 @@ async function fetchThreadsByCategoryFromEnd(
 					discussions(last: $last, categoryId: $categoryId, orderBy: { field: $orderBy, direction: DESC }) {
 						totalCount
 						nodes {
-							id number title createdAt isAnswered state
+							id number title createdAt isAnswered
 							author { login avatarUrl url }
 							labels(first: 10) { nodes { name color } }
 							comments { totalCount }
@@ -491,7 +489,6 @@ async function fetchThreadsByCategoryFromEnd(
 		)
 	);
 	const discussions = result.repository.discussions;
-	discussions.nodes = discussions.nodes.filter((d: any) => d.state === 'OPEN');
 	setCache(cacheKey, discussions, 60);
 	return discussions;
 }
@@ -520,7 +517,7 @@ async function fetchAllDiscussionsFromEnd(
 					discussions(last: $last, orderBy: { field: $orderBy, direction: DESC }) {
 						totalCount
 						nodes {
-							id number title createdAt isAnswered state
+							id number title createdAt isAnswered
 							author { login avatarUrl url }
 							category { id name slug emoji emojiHTML }
 							labels(first: 10) { nodes { name color } }
@@ -534,7 +531,6 @@ async function fetchAllDiscussionsFromEnd(
 		)
 	);
 	const discussions = result.repository.discussions;
-	discussions.nodes = discussions.nodes.filter((d: any) => d.state === 'OPEN');
 	for (const d of discussions.nodes) parseCategoryEmoji(d.category);
 	setCache(cacheKey, discussions, 60);
 	return discussions;
@@ -1073,7 +1069,7 @@ export async function fetchLatestDiscussions(first: number = 30, orderBy: string
 				repository(owner: $owner, name: $repo) {
 					discussions(first: $first, orderBy: { field: $orderBy, direction: DESC }) {
 						nodes {
-							id number title createdAt isAnswered state
+							id number title createdAt isAnswered
 							author { login avatarUrl url }
 							category { id name slug emoji emojiHTML }
 							labels(first: 10) { nodes { name color } }
@@ -1087,8 +1083,7 @@ export async function fetchLatestDiscussions(first: number = 30, orderBy: string
 		)
 	);
 	const discussions = result.repository.discussions.nodes
-		.filter((d: any) => d.state === 'OPEN')
-		.map((d: any) => {
+			.map((d: any) => {
 			parseCategoryEmoji(d.category);
 			return d;
 		});
@@ -1151,7 +1146,7 @@ export async function fetchTopDiscussions(
 	);
 
 	const discussions = (result.search.nodes as any[])
-		.filter((n: any) => n?.number && n?.state === 'OPEN')
+		.filter((n: any) => n?.number)
 		.map((d: any) => { parseCategoryEmoji(d.category); return d; });
 
 	setCache(cacheKey, discussions, 60);

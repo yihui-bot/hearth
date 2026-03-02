@@ -146,15 +146,27 @@ This allows users to sign in and create threads/replies.
    BASE_URL=https://yourdomain.com
    ```
 
+### About the `gh_token` cookie
+
+After sign-in, the user's GitHub OAuth token is stored in a browser cookie named `gh_token`. You may see its value (e.g. `gho_xxxx`) in the browser's DevTools under Network → Request Headers → Cookie. This is expected behaviour — DevTools shows every header the browser sends, including cookies.
+
+Key protections in place:
+
+- **`httpOnly: true`** — the cookie cannot be read by any JavaScript on the page (no `document.cookie` access), which prevents it from being stolen by XSS attacks
+- **`secure: true`** — the cookie is only sent over HTTPS, preventing network interception
+- **`sameSite: lax`** — the cookie is not sent on cross-site POST requests, preventing CSRF attacks
+
+**What the token can actually do:** Gitorum requests the `public_repo` OAuth scope. Despite the name, this scope grants **write access** to public repositories, not just read access. A user with this token can create and edit discussions on your forum's behalf. If you are concerned, you can revoke a token at any time from [GitHub Settings → Applications → Authorized OAuth Apps](https://github.com/settings/applications).
+
+**Token lifetime:** The cookie is valid for 30 days. It is not short-lived. Users can explicitly sign out (which deletes the cookie), or GitHub can invalidate the token if the OAuth App is uninstalled or the user revokes access.
+
 ---
 
 ## 5. Caching Strategy
 
-Gitorum uses two layers of caching to minimize GitHub API usage:
+### Server-Side In-Memory Cache (built-in)
 
-### Layer 1: Server-Side In-Memory Cache (built-in)
-
-All read operations are cached in memory on the SvelteKit server:
+All GitHub API read operations are cached in memory on the SvelteKit server:
 
 | Data | TTL |
 |------|-----|
@@ -164,47 +176,17 @@ All read operations are cached in memory on the SvelteKit server:
 | Search results | 1 minute |
 | Repo ID | 1 hour |
 
-This reduces redundant API calls within a single server process.
+This deduplicates GitHub API calls within a single server process, so repeated page loads within the TTL window hit the cache rather than the API.
 
-### Layer 2: HTTP Cache Headers (for CDN/Cloudflare)
+### Why CDN/browser caching is disabled
 
-All read pages return `Cache-Control` headers with `s-maxage` for CDN/edge caching.
+Every page in Gitorum includes an auth-aware header (showing either "Sign in with GitHub" or the signed-in user's avatar). Because the same URL serves different HTML depending on whether the visitor is logged in, responses are sent with `Cache-Control: no-store` — meaning no CDN or browser will cache the HTML.
 
-### Setting Up Cloudflare Caching
+Without this, CDNs such as Cloudflare would serve the same cached anonymous page to logged-in users, because CDNs do not vary their cache key by cookie value by default.
 
-If you deploy to **Cloudflare Pages** or put Cloudflare in front of your deployment:
+Page **performance** is not significantly impacted: the in-memory cache absorbs repeated GitHub API calls, so the server can respond quickly without hitting the API on every request. The only cost is that each browser request reaches the SvelteKit server rather than a CDN edge node.
 
-1. **Go to**: Cloudflare Dashboard → your domain → Caching → Configuration
-
-2. **Browser Cache TTL**: Set to "Respect existing headers" (so our `Cache-Control` headers are honored)
-
-3. **Create a Cache Rule** (Rules → Cache Rules → Create rule):
-   - **Rule name**: `Forum page cache`
-   - **When**: Custom filter expression:
-     ```
-     (http.request.uri.path eq "/" or
-      http.request.uri.path matches "^/c/.*" or
-      http.request.uri.path matches "^/t/.*" or
-      http.request.uri.path matches "^/search.*")
-     ```
-   - **Then**: Eligible for cache
-     - **Edge TTL**: Override — `60 seconds`
-     - **Browser TTL**: Override — `60 seconds`
-
-4. **Exclude auth routes** — The `/auth/*` and `/api/*` routes should **not** be cached. If needed, create an exclusion rule:
-   - **When**: `http.request.uri.path matches "^/(auth|api)/.*"`
-   - **Then**: Bypass cache
-
-5. (Optional) **Cloudflare Workers** — For more control, you can use a Cloudflare Worker to add caching logic. Cloudflare Pages Functions already support `Cache-Control` headers natively.
-
-### Cloudflare Page Rules (alternative)
-
-If you prefer Page Rules:
-- `yourdomain.com/` → Cache Level: Cache Everything, Edge Cache TTL: 2 minutes
-- `yourdomain.com/c/*` → Cache Level: Cache Everything, Edge Cache TTL: 1 minute
-- `yourdomain.com/t/*` → Cache Level: Cache Everything, Edge Cache TTL: 1 minute
-- `yourdomain.com/auth/*` → Cache Level: Bypass
-- `yourdomain.com/api/*` → Cache Level: Bypass
+**Is per-group caching possible?** Technically, a CDN *Vary* on a cookie is possible but most CDNs (including Cloudflare) do not support it out of the box. Maintaining two separate cache namespaces (logged-in / logged-out) would require a custom CDN Worker and additional complexity. The in-memory cache is sufficient for a forum workload.
 
 ---
 

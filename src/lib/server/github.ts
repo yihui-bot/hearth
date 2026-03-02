@@ -674,7 +674,7 @@ export async function fetchTopDiscussions(
 	const owner = getRepoOwner();
 	const repo = getRepoName();
 
-	let searchQuery = `repo:${owner}/${repo} type:discussion sort:top`;
+	let searchQuery = `repo:${owner}/${repo} type:discussion sort:reactions`;
 	if (categorySlug) searchQuery += ` category:${categorySlug}`;
 	if (sort === 'trending') {
 		const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { timeAgo, slugify } from '$lib/utils';
+	import { formatDate } from '$lib/utils';
 
 	let { data } = $props();
 </script>
@@ -34,12 +34,12 @@
 	{/if}
 
 	{#if data.results.length > 0}
-		<div class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
+		<div class="divide-y divide-amber-100 rounded-lg border border-amber-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
 			{#each data.results as thread}
 				{#if thread.number}
 					<a
-						href="/t/{thread.number}/{slugify(thread.title)}"
-						class="flex items-center gap-4 px-4 py-3 transition hover:bg-gray-50 dark:hover:bg-gray-800/50"
+						href="/t/{thread.number}"
+						class="flex items-center gap-4 px-4 py-3 transition hover:bg-amber-100/50 dark:hover:bg-gray-800/50"
 					>
 						{#if thread.author}
 							<img src={thread.author.avatarUrl} alt={thread.author.login} class="h-9 w-9 rounded-full" />
@@ -49,18 +49,18 @@
 
 						<div class="min-w-0 flex-1">
 							<h3 class="truncate font-medium text-gray-900 dark:text-gray-100">{thread.title}</h3>
-							<p class="text-xs text-gray-500 dark:text-gray-400">
+							<p class="text-sm text-gray-500 dark:text-gray-400">
 								{thread.author?.login || 'ghost'}
 								{#if thread.category}
 									 in {thread.category.name}
 								{/if}
-								 · {timeAgo(thread.createdAt)}
+								 · {formatDate(thread.createdAt)}
 							</p>
 						</div>
 
-						<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+						<div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
 							{#if thread.reactions?.totalCount > 0}
-								<span>❤️ {thread.reactions.totalCount}</span>
+								<span>✨ {thread.reactions.totalCount}</span>
 							{/if}
 							{#if thread.comments}
 								<span>💬 {thread.comments.totalCount}</span>
@@ -82,7 +82,7 @@
 			</div>
 		{/if}
 	{:else if data.query}
-		<div class="rounded-lg border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+		<div class="rounded-lg border border-amber-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
 			<p class="text-gray-500 dark:text-gray-400">No results found.</p>
 		</div>
 	{/if}

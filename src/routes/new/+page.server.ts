@@ -1,6 +1,5 @@
 import { fetchCategories, fetchRepoId, createDiscussion } from '$lib/server/github';
 import { redirect, error } from '@sveltejs/kit';
-import { slugify } from '$lib/utils';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -41,7 +40,6 @@ export const actions: Actions = {
 			body.trim()
 		);
 
-		const slug = slugify(discussion.title);
-		redirect(303, `/t/${discussion.number}/${slug}`);
+		redirect(303, `/t/${discussion.number}`);
 	}
 };

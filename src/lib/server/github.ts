@@ -364,9 +364,111 @@ export async function fetchThreadsByCategory(
 }
 
 /**
+ * Fetch discussions without category filter (for the homepage).
+ */
+export async function fetchAllDiscussions(
+	first: number = 20,
+	after?: string,
+	orderBy: string = 'UPDATED_AT',
+	userToken?: string | null
+) {
+	const cacheKey = `allThreads:${first}:${after || ''}:${orderBy}`;
+	const cached = getCached<any>(cacheKey);
+	if (cached) return cached;
+
+	const owner = getRepoOwner();
+	const repo = getRepoName();
+	const token = await getReadToken(userToken);
+
+	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
+
+	const result: any = await executeGraphQLRead(token, (gql) =>
+		gql(
+			`query($owner: String!, $repo: String!, $first: Int!, $after: String, $orderBy: DiscussionOrderField!) {
+				repository(owner: $owner, name: $repo) {
+					discussions(first: $first, after: $after, orderBy: { field: $orderBy, direction: DESC }) {
+						totalCount
+						pageInfo { hasNextPage endCursor }
+						nodes {
+							id number title createdAt isAnswered
+							author { login avatarUrl url }
+							category { id name slug emoji emojiHTML }
+							labels(first: 10) { nodes { name color } }
+							comments { totalCount }
+							reactions { totalCount }
+						}
+					}
+				}
+			}`,
+			{ owner, repo, first, after: after || null, orderBy }
+		)
+	);
+	const discussions = result.repository.discussions;
+	for (const d of discussions.nodes) parseCategoryEmoji(d.category);
+
+	setCache(cacheKey, discussions, 60);
+	return discussions;
+}
+
+// ---------------------------------------------------------------------------
+// Batch cursor building: fetch 100 edges at a time to extract cursors at
+// every perPage boundary, reducing API calls from O(pages) to O(pages/5).
+// ---------------------------------------------------------------------------
+const CURSOR_BATCH_SIZE = 100;
+
+async function fetchCursorEdges(
+	batchSize: number,
+	after: string | undefined,
+	orderBy: string,
+	categoryId: string | null,
+	userToken?: string | null
+): Promise<Array<{ cursor: string }>> {
+	const owner = getRepoOwner();
+	const repo = getRepoName();
+	const token = await getReadToken(userToken);
+	if (!token) throw new Error('No API token available. Please configure a GitHub App.');
+
+	const categoryParam = categoryId ? ', $categoryId: ID!' : '';
+	const categoryArg = categoryId ? ', categoryId: $categoryId' : '';
+	const variables: Record<string, unknown> = { owner, repo, first: batchSize, after: after || null, orderBy };
+	if (categoryId) variables.categoryId = categoryId;
+
+	const result: any = await executeGraphQLRead(token, (gql) =>
+		gql(
+			`query($owner: String!, $repo: String!, $first: Int!, $after: String, $orderBy: DiscussionOrderField!${categoryParam}) {
+				repository(owner: $owner, name: $repo) {
+					discussions(first: $first${categoryArg}, after: $after, orderBy: { field: $orderBy, direction: DESC }) {
+						edges { cursor }
+					}
+				}
+			}`,
+			variables
+		)
+	);
+	return result.repository.discussions.edges;
+}
+
+/**
+ * Build page cursors in batches of CURSOR_BATCH_SIZE (100) to reduce the
+ * number of API calls. Each batch yields multiple page cursors.
+ */
+function buildCursorsFromEdges(
+	edges: Array<{ cursor: string }>,
+	perPage: number,
+	existingCursors: string[],
+	neededCount: number
+): string[] {
+	let cursors = [...existingCursors];
+	for (let i = perPage - 1; i < edges.length && cursors.length < neededCount; i += perPage) {
+		cursors.push(edges[i].cursor);
+	}
+	return cursors;
+}
+
+/**
  * Fetch a specific page of threads for a category.
- * Uses a server-side cursor cache so any page can be accessed directly.
- * On first access of page N, pages 1…N-1 are fetched to build the cursor chain.
+ * Uses batch cursor building (100 items at a time) to stay within
+ * Cloudflare Workers' subrequest limits.
  */
 export async function fetchThreadsByPage(
 	categoryId: string,
@@ -378,22 +480,57 @@ export async function fetchThreadsByPage(
 	const storeKey = `${categoryId}:${orderBy}`;
 	let cursors = pageCursorCache.get(storeKey) || [];
 
-	// Build up cursors up to the page we need (cursors[i] = endCursor of page i+1)
+	// Build cursors in batches of CURSOR_BATCH_SIZE to reduce API calls
 	if (page > 1 && cursors.length < page - 1) {
-		for (let p = cursors.length + 1; p < page; p++) {
-			const prevCursor = cursors.length > 0 ? cursors[cursors.length - 1] : undefined;
-			const res = await fetchThreadsByCategory(categoryId, perPage, prevCursor, orderBy, userToken);
-			if (res?.pageInfo?.endCursor) {
-				cursors = [...cursors, res.pageInfo.endCursor];
-				pageCursorCache.set(storeKey, cursors);
-			} else {
-				break; // No more pages
-			}
+		while (cursors.length < page - 1) {
+			const after = cursors.length > 0 ? cursors[cursors.length - 1] : undefined;
+			const edges = await fetchCursorEdges(CURSOR_BATCH_SIZE, after, orderBy, categoryId, userToken);
+			if (edges.length === 0) break;
+			cursors = buildCursorsFromEdges(edges, perPage, cursors, page - 1);
+			pageCursorCache.set(storeKey, cursors);
+			if (edges.length < CURSOR_BATCH_SIZE) break;
 		}
 	}
 
 	const cursor = page > 1 ? cursors[page - 2] : undefined;
 	const data = await fetchThreadsByCategory(categoryId, perPage, cursor, orderBy, userToken);
+
+	// Cache endCursor for next page
+	if (data?.pageInfo?.hasNextPage && data.pageInfo.endCursor && cursors.length < page) {
+		cursors = [...cursors, data.pageInfo.endCursor];
+		pageCursorCache.set(storeKey, cursors);
+	}
+
+	return data;
+}
+
+/**
+ * Fetch a specific page of all discussions (homepage, no category filter).
+ * Uses batch cursor building like fetchThreadsByPage.
+ */
+export async function fetchAllDiscussionsByPage(
+	page: number,
+	perPage: number = 20,
+	orderBy: string = 'UPDATED_AT',
+	userToken?: string | null
+) {
+	const storeKey = `all:${orderBy}`;
+	let cursors = pageCursorCache.get(storeKey) || [];
+
+	// Build cursors in batches
+	if (page > 1 && cursors.length < page - 1) {
+		while (cursors.length < page - 1) {
+			const after = cursors.length > 0 ? cursors[cursors.length - 1] : undefined;
+			const edges = await fetchCursorEdges(CURSOR_BATCH_SIZE, after, orderBy, null, userToken);
+			if (edges.length === 0) break;
+			cursors = buildCursorsFromEdges(edges, perPage, cursors, page - 1);
+			pageCursorCache.set(storeKey, cursors);
+			if (edges.length < CURSOR_BATCH_SIZE) break;
+		}
+	}
+
+	const cursor = page > 1 ? cursors[page - 2] : undefined;
+	const data = await fetchAllDiscussions(perPage, cursor, orderBy, userToken);
 
 	// Cache endCursor for next page
 	if (data?.pageInfo?.hasNextPage && data.pageInfo.endCursor && cursors.length < page) {

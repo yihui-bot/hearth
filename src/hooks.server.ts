@@ -10,7 +10,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 				method: 'POST',
 				headers: {
 					Authorization: `bearer ${token}`,
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
+					'User-Agent': 'Gitorum'
 				},
 				body: JSON.stringify({
 					query: '{ viewer { login avatarUrl } }'

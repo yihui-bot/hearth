@@ -184,7 +184,7 @@ mutation($discussionId: ID!, $body: String!) {
 ## Markdown Rendering
 
 - GitHub returns `bodyHTML` pre-rendered — used directly for display
-- For preview (create/reply forms): `marked` + `DOMPurify` for client-side rendering
+- For preview (create/reply forms): `marked` for client-side rendering (preview is only shown to the author; all stored/displayed content comes from GitHub's pre-sanitized `bodyHTML`)
 - No rich text editor — plain `<textarea>` with a preview toggle
 
 ---
